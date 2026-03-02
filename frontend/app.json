@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "FitClub",
+    "slug": "fitclub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#2563eb"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "io.fitclub.app"
+    },
+    "android": {
+      "package": "io.fitclub.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#2563eb"
+      }
+    },
+    "web": {},
+    "extra": {
+      "EXPO_PUBLIC_API_URL": "https://fitclub-api-yzvzjjntma-uw.a.run.app/api"
+    },
+    "scheme": "fitclub"
+  }
+}

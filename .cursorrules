@@ -1,0 +1,5 @@
+# FitClub project rules
+
+## Reference codebase: TeenLifeManager (read-only)
+
+**Do not modify any file in the TeenLifeManager folder from this workspace.** TeenLifeManager is included for reference only. You may read and copy from it (structure, patterns, docs); never edit, move, or delete files in that project.

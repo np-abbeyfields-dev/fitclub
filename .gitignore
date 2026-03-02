@@ -1,0 +1,138 @@
+# Dependencies
+node_modules/
+*/node_modules/
+package-lock.json
+*/package-lock.json
+yarn.lock
+*/yarn.lock
+
+# Build outputs
+dist/
+*/dist/
+build/
+*/build/
+.expo/
+frontend/.expo/
+frontend/dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env*.backup
+*/.env
+*/.env.local
+*/.env*.backup
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Local npm cache (do not commit)
+.npm-cache/
+frontend/.npm-cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+*/coverage/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Cloud SQL local config (keep out of git)
+backend/.cloudsql.env
+backend/.cloudsql.*.env
+
+# Expo
+.expo/
+.expo-shared/
+frontend/.expo/
+
+# Docker volumes
+postgres_data/
+
+# iOS
+ios/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+frontend/ios/
+
+# Android
+android/
+*.apk
+*.ap_
+*.aab
+.gradle/
+local.properties
+*.iml
+frontend/android/
+
+# Apple signing keys (DO NOT COMMIT)
+*.p8
+
+# EAS
+.eas/
+# EAS credentials (keystore paths, passwords – DO NOT COMMIT)
+credentials.json
+frontend/credentials.json
+**/keystores/*.jks
+**/keystores/*.keystore
+
+# Database connection files with sensitive info
+DATABASE_CONNECTION_FIX_SUMMARY.md
+*_FIX*.md
+backend/scripts/test-*.sh
+
+# Sensitive project information (DO NOT COMMIT)
+GEMINI_API_KEY_INFO.md
+YOUR_GCP_PROJECT_INFO.md
+GCP_ACCOUNT_INFO.md
+GOOGLE_OAUTH_SETUP.md
+OAUTH_SETUP.md
+OAUTH_SETUP_GUIDE.md
+*_PROJECT_INFO.md
+*_ACCOUNT_INFO.md
+*_API_KEY*.md
+*_SECRETS*.md
+*_CREDENTIALS*.md
+
+# Local notes and sensitive documentation
+local-notes/*
+!local-notes/.gitkeep
+!local-notes/README.md
+personal-notes/
+*.local.md
+*.private.md
+
+# Secret migration exports (DO NOT COMMIT)
+legacy-secrets-export/
+backend/scripts/legacy-secrets-export/
+**/legacy-secrets-export/
+github-actions-sa-key.json
+backend/scripts/github-actions-sa-key.json

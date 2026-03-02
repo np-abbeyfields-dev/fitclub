@@ -1,0 +1,7 @@
+{
+  "name": "fitclub-monorepo",
+  "version": "1.0.0",
+  "description": "FitClub - Backend (Cloud Run + Cloud SQL) and Frontend (Expo/React Native)",
+  "private": true,
+  "engines": { "node": ">=20.0.0" }
+}

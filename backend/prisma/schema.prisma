@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ClubMemberships ClubMembership[]
+  TeamMemberships TeamMembership[]
+  Workouts        Workout[]
+  ScoreLedgers    ScoreLedger[]
+
+  @@index([email])
+}
+
+model Club {
+  id          String   @id @default(uuid())
+  name        String
+  inviteCode  String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  Memberships ClubMembership[]
+  Rounds      Round[]
+
+  @@index([inviteCode])
+}
+
+enum ClubRole {
+  admin
+  member
+  @@map("club_role")
+}
+
+model ClubMembership {
+  id        String   @id @default(uuid())
+  userId    String
+  clubId    String
+  role      ClubRole @default(member)
+  joinedAt  DateTime @default(now())
+
+  User User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clubId])
+  @@index([userId])
+  @@index([clubId])
+}
+
+model Round {
+  id              String   @id @default(uuid())
+  clubId          String
+  name            String
+  startDate       DateTime
+  endDate         DateTime
+  scoringConfig   Json     // RoundScoringConfig per FITCLUB_SCORING_ENGINE_SPEC
+  teamSize        Int?
+  locked          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  Club  Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  Teams Team[]
+  Workouts     Workout[]
+  ScoreLedgers ScoreLedger[]
+
+  @@index([clubId])
+  @@index([startDate, endDate])
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  roundId   String
+  name      String
+  createdAt DateTime @default(now())
+
+  Round       Round            @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  Memberships TeamMembership[]
+
+  @@index([roundId])
+}
+
+model TeamMembership {
+  id        String   @id @default(uuid())
+  userId    String
+  teamId    String
+  roundId   String
+
+  User  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@index([userId])
+  @@index([teamId])
+  @@index([roundId])
+}
+
+model Workout {
+  id             String   @id @default(uuid())
+  userId         String
+  roundId        String
+  activityType   String
+  durationMinutes Int?
+  distanceKm     Float?
+  proofUrl       String?
+  loggedAt       DateTime
+  createdAt      DateTime @default(now())
+
+  User         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Round        Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  ScoreLedger  ScoreLedger?
+
+  @@index([userId])
+  @@index([roundId])
+  @@index([loggedAt])
+}
+
+model ScoreLedger {
+  id                   String   @id @default(uuid())
+  workoutId            String   @unique
+  userId               String
+  roundId              String
+  rawPoints            Float
+  cappedPoints         Float
+  dailyAdjustedPoints  Float
+  finalAwardedPoints   Float
+  ruleSnapshotJson     String?
+  createdAt            DateTime @default(now())
+
+  Workout Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  User    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Round   Round   @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([roundId])
+  @@index([createdAt])
+}
