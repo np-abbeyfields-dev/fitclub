@@ -9,6 +9,9 @@ import { securityHeaders, enforceHTTPS } from './middleware/security';
 
 import authRoutes from './routes/auth.routes';
 import clubRoutes from './routes/club.routes';
+import roundRoutes from './routes/round.routes';
+import teamRoutes from './routes/team.routes';
+import workoutRoutes from './routes/workout.routes';
 
 const app = express();
 
@@ -65,7 +68,10 @@ app.get('/health', async (_req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api', roundRoutes);
 app.use('/api/clubs', clubRoutes);
+app.use('/api', teamRoutes);
+app.use('/api', workoutRoutes);
 
 app.use(errorHandler);
 

@@ -22,6 +22,9 @@
     "extra": {
       "EXPO_PUBLIC_API_URL": "https://fitclub-api-yzvzjjntma-uw.a.run.app/api"
     },
-    "scheme": "fitclub"
+    "scheme": "fitclub",
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ]
   }
 }

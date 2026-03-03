@@ -2,6 +2,8 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  /** Used to show/hide admin-only routes (e.g. Rounds, Analytics, Settings) */
+  role?: 'admin' | 'member';
 }
 
 export interface Club {

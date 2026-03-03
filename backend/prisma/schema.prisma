@@ -42,6 +42,13 @@ enum ClubRole {
   @@map("club_role")
 }
 
+enum RoundStatus {
+  draft
+  active
+  ended
+  @@map("round_status")
+}
+
 model ClubMembership {
   id        String   @id @default(uuid())
   userId    String
@@ -58,24 +65,27 @@ model ClubMembership {
 }
 
 model Round {
-  id              String   @id @default(uuid())
+  id              String      @id @default(uuid())
   clubId          String
   name            String
   startDate       DateTime
   endDate         DateTime
-  scoringConfig   Json     // RoundScoringConfig per FITCLUB_SCORING_ENGINE_SPEC
+  scoringConfig   Json        // RoundScoringConfig per FITCLUB_SCORING_ENGINE_SPEC
   teamSize        Int?
-  locked          Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  locked          Boolean     @default(false)
+  status          RoundStatus @default(draft)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   Club  Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
   Teams Team[]
   Workouts     Workout[]
   ScoreLedgers ScoreLedger[]
+  TeamMemberships TeamMembership[]
 
   @@index([clubId])
   @@index([startDate, endDate])
+  @@index([clubId, status])
 }
 
 model Team {
@@ -98,8 +108,10 @@ model TeamMembership {
 
   User  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   Team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  Round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
   @@unique([userId, teamId])
+  @@unique([userId, roundId])
   @@index([userId])
   @@index([teamId])
   @@index([roundId])
@@ -144,4 +156,30 @@ model ScoreLedger {
   @@index([userId])
   @@index([roundId])
   @@index([createdAt])
+}
+
+// Reference data: generic workout types with MET/scoring parameters
+model GenericWorkoutMet {
+  id             Int     @id @default(autoincrement())
+  workoutType    String  @unique @map("workout_type")
+  avgMetPerHour  Float?  @map("avg_met_per_hour")
+  minMet         Float?  @map("min_met")
+  maxMet         Float?  @map("max_met")
+  mlp            Float?  @map("mlp")
+  maxMetLimit    Float?  @map("max_met_limit")
+  metCap         Float?  @map("met_cap")
+
+  workoutMasters WorkoutMaster[]
+
+  @@map("generic_workout_met")
+}
+
+// Maps specific workout type names to generic workout categories
+model WorkoutMaster {
+  id                 Int               @id @default(autoincrement())
+  workoutType        String            @unique
+  genericWorkoutType String
+  genericWorkout     GenericWorkoutMet @relation(fields: [genericWorkoutType], references: [workoutType])
+
+  @@map("WorkoutMaster")
 }

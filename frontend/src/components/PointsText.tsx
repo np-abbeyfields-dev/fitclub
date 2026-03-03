@@ -1,0 +1,31 @@
+import React from 'react';
+import { Text, TextStyle } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
+
+type PointsTextProps = {
+  value: number | string;
+  style?: TextStyle;
+  /** Use accent (lime) color for points */
+  accent?: boolean;
+};
+
+export function PointsText({ value, style, accent = true }: PointsTextProps) {
+  const theme = useTheme();
+  const { colors, typography } = theme;
+
+  return (
+    <Text
+      style={[
+        {
+          fontSize: typography.display.fontSize,
+          fontWeight: typography.display.fontWeight,
+          lineHeight: typography.display.lineHeight,
+          color: accent ? colors.accent : colors.text,
+        },
+        style,
+      ]}
+    >
+      {typeof value === 'number' ? value.toLocaleString() : value}
+    </Text>
+  );
+}

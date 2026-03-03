@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { ClubService } from '../services/club.service';
+import { DashboardService } from '../services/dashboard.service';
 import { AuthRequest, ApiResponse } from '../types';
 
 export class ClubController {
@@ -25,8 +26,71 @@ export class ClubController {
     res.status(201).json({ success: true, data: membership, message: 'Joined club.' } as ApiResponse);
   }
 
+  static async getDashboard(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    if (!clubId) {
+      res.status(400).json({ success: false, error: 'Club ID required.' } as ApiResponse);
+      return;
+    }
+    const data = await DashboardService.getDashboard(clubId, userId);
+    res.json({ success: true, data } as ApiResponse);
+  }
+
+  static async getById(req: AuthRequest, res: Response): Promise<void> {
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    if (!clubId) {
+      res.status(400).json({ success: false, error: 'Club ID required.' } as ApiResponse);
+      return;
+    }
+    const club = await ClubService.getClub(clubId, req.user!.id);
+    res.json({ success: true, data: club } as ApiResponse);
+  }
+
   static async listMine(req: AuthRequest, res: Response): Promise<void> {
     const clubs = await ClubService.listMyClubs(req.user!.id);
     res.json({ success: true, data: clubs } as ApiResponse);
+  }
+
+  static async setMemberRole(req: AuthRequest, res: Response): Promise<void> {
+    const adminUserId = req.user!.id;
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+    if (!clubId || !userId) {
+      res.status(400).json({ success: false, error: 'Club ID and user ID required.' } as ApiResponse);
+      return;
+    }
+    const role = req.body?.role;
+    if (role !== 'admin' && role !== 'member') {
+      res.status(400).json({ success: false, error: 'role must be "admin" or "member".' } as ApiResponse);
+      return;
+    }
+    const membership = await ClubService.setMemberRole(clubId, adminUserId, userId, role);
+    res.json({ success: true, data: membership, message: 'Member role updated.' } as ApiResponse);
+  }
+
+  static async listMembers(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    if (!clubId) {
+      res.status(400).json({ success: false, error: 'Club ID required.' } as ApiResponse);
+      return;
+    }
+    const search = typeof req.query?.search === 'string' ? req.query.search : undefined;
+    const activeRoundId = typeof req.query?.activeRoundId === 'string' ? req.query.activeRoundId : undefined;
+    const members = await ClubService.listMembers(clubId, userId, { search, activeRoundId });
+    res.json({ success: true, data: members } as ApiResponse);
+  }
+
+  static async removeMember(req: AuthRequest, res: Response): Promise<void> {
+    const adminUserId = req.user!.id;
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+    if (!clubId || !userId) {
+      res.status(400).json({ success: false, error: 'Club ID and user ID required.' } as ApiResponse);
+      return;
+    }
+    await ClubService.removeMember(clubId, adminUserId, userId);
+    res.json({ success: true, message: 'Member removed.' } as ApiResponse);
   }
 }

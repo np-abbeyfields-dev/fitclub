@@ -1,23 +1,38 @@
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuthStore } from './src/store/authStore';
 import { initializeAPI } from './src/config/api';
+import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import { injectWebReset } from './src/theme/globalStyles';
+import { getPersistedNavState, saveNavState } from './src/navigation/persistence';
+import { navLightTheme, navDarkTheme } from './src/navigation/theme';
 
-import LoginScreen from './src/screens/LoginScreen';
-import RegisterScreen from './src/screens/RegisterScreen';
-import JoinClubScreen from './src/screens/JoinClubScreen';
-import CreateClubScreen from './src/screens/CreateClubScreen';
-import HomeScreen from './src/screens/HomeScreen';
+import { AuthStack } from './src/navigation/AuthStack';
+import { RootStack } from './src/navigation/RootStack';
+import { WebAppLayout } from './src/layout/WebAppLayout';
+import { ClubProvider } from './src/context/ClubContext';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-type Screen = 'login' | 'register' | 'home' | 'joinClub' | 'createClub';
+function LoadingView() {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+      <ActivityIndicator size="large" color={colors.primary} />
+    </View>
+  );
+}
 
-export default function App() {
+function AppContent() {
   const { isAuthenticated, isLoading, initializeAuth } = useAuthStore();
-  const [screen, setScreen] = useState<Screen>('login');
+  const [navReady, setNavReady] = useState(false);
+  const [initialState, setInitialState] = useState<React.ComponentProps<typeof NavigationContainer>['initialState']>(undefined);
+  const theme = useTheme();
+  const navTheme = theme.isDark ? navDarkTheme : navLightTheme;
 
   useEffect(() => {
     initializeAPI();
@@ -27,76 +42,62 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isLoading) {
-      setScreen((s) => (isAuthenticated ? 'home' : 'login'));
+    if (isAuthenticated) {
+      getPersistedNavState()
+        .then((state) => setInitialState((state as React.ComponentProps<typeof NavigationContainer>['initialState']) ?? undefined))
+        .finally(() => setNavReady(true));
+    } else {
+      setInitialState(undefined);
+      setNavReady(true);
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated]);
 
-  if (isLoading) {
-    return (
-      <SafeAreaProvider>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#2563eb" />
-        </View>
-      </SafeAreaProvider>
-    );
+  if (isLoading || (isAuthenticated && !navReady)) {
+    return <LoadingView />;
   }
 
-  if (screen === 'login') {
-    return (
-      <SafeAreaProvider>
-        <LoginScreen
-          onRegister={() => setScreen('register')}
-          onSuccess={() => setScreen('home')}
-        />
-      </SafeAreaProvider>
-    );
-  }
-
-  if (screen === 'register') {
-    return (
-      <SafeAreaProvider>
-        <RegisterScreen
-          onLogin={() => setScreen('login')}
-          onSuccess={() => setScreen('home')}
-        />
-      </SafeAreaProvider>
-    );
-  }
-
-  if (screen === 'joinClub') {
-    return (
-      <SafeAreaProvider>
-        <JoinClubScreen
-          onSuccess={() => setScreen('home')}
-          onBack={() => setScreen('home')}
-        />
-      </SafeAreaProvider>
-    );
-  }
-
-  if (screen === 'createClub') {
-    return (
-      <SafeAreaProvider>
-        <CreateClubScreen
-          onSuccess={() => setScreen('home')}
-          onBack={() => setScreen('home')}
-        />
-      </SafeAreaProvider>
-    );
-  }
+  const isWeb = Platform.OS === 'web';
 
   return (
-    <SafeAreaProvider>
-      <HomeScreen
-        onCreateClub={() => setScreen('createClub')}
-        onJoinClub={() => setScreen('joinClub')}
-        onLogout={() => setScreen('login')}
-      />
-    </SafeAreaProvider>
+    <NavigationContainer
+      key={isAuthenticated ? 'main' : 'auth'}
+      theme={navTheme}
+      initialState={isAuthenticated && !isWeb ? initialState : undefined}
+      onStateChange={(state) => {
+        if (isAuthenticated && !isWeb && state) saveNavState(state);
+      }}
+    >
+      {isAuthenticated ? (
+        <ClubProvider>
+          {isWeb ? (
+            <WebAppLayout />
+          ) : (
+            <RootStack />
+          )}
+        </ClubProvider>
+      ) : (
+        <AuthStack onLoginSuccess={() => {}} />
+      )}
+    </NavigationContainer>
   );
 }
 
-const styles = StyleSheet.create({
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
-});
+function AppStatusBar() {
+  const theme = useTheme();
+  return <StatusBar style={theme.isDark ? 'light' : 'dark'} />;
+}
+
+export default function App() {
+  useEffect(() => {
+    injectWebReset();
+  }, []);
+
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppStatusBar />
+        <AppContent />
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+}

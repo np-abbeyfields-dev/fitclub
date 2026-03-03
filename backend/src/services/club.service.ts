@@ -56,6 +56,17 @@ export class ClubService {
     return memberships.map((m) => ({ ...m.Club, role: m.role, joinedAt: m.joinedAt }));
   }
 
+  /** Club member. Returns club with inviteCode only when caller is admin (for inviting). */
+  static async getClub(clubId: string, userId: string) {
+    const m = await this.ensureMember(userId, clubId);
+    const club = await prisma.club.findUniqueOrThrow({
+      where: { id: clubId },
+      select: { id: true, name: true, createdAt: true, inviteCode: true },
+    });
+    const { inviteCode, ...rest } = club;
+    return { ...rest, role: m.role, ...(m.role === 'admin' ? { inviteCode } : {}) };
+  }
+
   static async ensureMember(userId: string, clubId: string, role?: 'admin' | 'member') {
     const m = await prisma.clubMembership.findUnique({
       where: { userId_clubId: { userId, clubId } },
@@ -63,5 +74,81 @@ export class ClubService {
     if (!m) throw new AuthorizationError('You are not a member of this club.');
     if (role === 'admin' && m.role !== 'admin') throw new AuthorizationError('Admin access required.');
     return m;
+  }
+
+  /** Admin only. Set another member's role (promote/demote). */
+  static async setMemberRole(clubId: string, adminUserId: string, targetUserId: string, newRole: 'admin' | 'member') {
+    await this.ensureMember(adminUserId, clubId, 'admin');
+    const target = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId: targetUserId, clubId } },
+    });
+    if (!target) throw new NotFoundError('Member not found in this club.');
+    const updated = await prisma.clubMembership.update({
+      where: { userId_clubId: { userId: targetUserId, clubId } },
+      data: { role: newRole },
+      include: { User: { select: { id: true, email: true, displayName: true } } },
+    });
+    return updated;
+  }
+
+  /** Any club member. List members with role; optionally include active-round team assignment. */
+  static async listMembers(clubId: string, userId: string, options?: { search?: string; activeRoundId?: string }) {
+    await this.ensureMember(userId, clubId);
+    const q = options?.search?.trim();
+    const memberships = await prisma.clubMembership.findMany({
+      where: {
+        clubId,
+        ...(q
+          ? {
+              User: {
+                OR: [
+                  { displayName: { contains: q, mode: 'insensitive' } },
+                  { email: { contains: q, mode: 'insensitive' } },
+                ],
+              },
+            }
+          : {}),
+      },
+      include: {
+        User: { select: { id: true, email: true, displayName: true } },
+      },
+      orderBy: { joinedAt: 'asc' },
+    });
+    let teamByUserId: Map<string, { teamId: string; teamName: string }> = new Map();
+    if (options?.activeRoundId) {
+      const teamMembers = await prisma.teamMembership.findMany({
+        where: { roundId: options.activeRoundId },
+        include: { Team: { select: { id: true, name: true } } },
+      });
+      teamMembers.forEach((tm) => teamByUserId.set(tm.userId, { teamId: tm.Team.id, teamName: tm.Team.name }));
+    }
+    return memberships.map((m) => ({
+      id: m.id,
+      userId: m.userId,
+      role: m.role,
+      joinedAt: m.joinedAt,
+      displayName: m.User.displayName,
+      email: m.User.email,
+      team: options?.activeRoundId ? teamByUserId.get(m.userId) ?? null : undefined,
+    }));
+  }
+
+  /** Admin only. Remove a member from the club. Cannot remove last admin. */
+  static async removeMember(clubId: string, adminUserId: string, targetUserId: string) {
+    await this.ensureMember(adminUserId, clubId, 'admin');
+    const target = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId: targetUserId, clubId } },
+    });
+    if (!target) throw new NotFoundError('Member not found in this club.');
+    const adminCount = await prisma.clubMembership.count({
+      where: { clubId, role: 'admin' },
+    });
+    if (target.role === 'admin' && adminCount <= 1) {
+      throw new ValidationError('Cannot remove the last admin.');
+    }
+    await prisma.clubMembership.delete({
+      where: { userId_clubId: { userId: targetUserId, clubId } },
+    });
+    return { success: true };
   }
 }

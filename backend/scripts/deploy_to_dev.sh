@@ -38,6 +38,51 @@ echo ""
 # Ensure Docker auth for Artifact Registry (needed for Cloud Build to push)
 gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet 2>/dev/null || true
 
+# Step 0.5: Run Prisma migrations against Cloud SQL (via proxy)
+PROXY_PORT="${PROXY_PORT:-5433}"
+if [ -f .env ] && grep -q "^DATABASE_URL=" .env 2>/dev/null; then
+  echo "Step 0.5: Running database migrations..."
+  PROXY_PID=""
+  cleanup_proxy() {
+    if [ -n "$PROXY_PID" ]; then
+      kill "$PROXY_PID" 2>/dev/null || true
+      wait "$PROXY_PID" 2>/dev/null || true
+    fi
+    pkill -f "cloud-sql-proxy.*${CONNECTION_NAME}" 2>/dev/null || true
+  }
+  trap cleanup_proxy EXIT
+  # Start Cloud SQL Proxy (use script dir's proxy binary if present)
+  if [ -f "${SCRIPT_DIR}/cloud-sql-proxy" ]; then
+    (cd "${SCRIPT_DIR}" && ./cloud-sql-proxy "${CONNECTION_NAME}" --port "${PROXY_PORT}" > /tmp/cloud-sql-proxy-deploy.log 2>&1) &
+    PROXY_PID=$!
+  elif command -v cloud-sql-proxy >/dev/null 2>&1; then
+    cloud-sql-proxy "${CONNECTION_NAME}" --port "${PROXY_PORT}" > /tmp/cloud-sql-proxy-deploy.log 2>&1 &
+    PROXY_PID=$!
+  else
+    echo "  Skipping migrations: cloud-sql-proxy not found. Run ./scripts/start-cloud-sql-proxy.sh once to download it, or install cloud-sql-proxy."
+    echo "  Then run manually: npx prisma migrate deploy"
+  fi
+  if [ -n "$PROXY_PID" ]; then
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      if lsof -i ":${PROXY_PORT}" >/dev/null 2>&1; then break; fi
+      sleep 1
+    done
+    if lsof -i ":${PROXY_PORT}" >/dev/null 2>&1; then
+      npx prisma migrate deploy
+      echo "  Migrations done."
+    else
+      echo "  Proxy did not start in time. Logs: /tmp/cloud-sql-proxy-deploy.log"
+      exit 1
+    fi
+  fi
+  trap - EXIT
+  cleanup_proxy
+  echo ""
+else
+  echo "Step 0.5: Skipping migrations (no .env or DATABASE_URL). Run 'npx prisma migrate deploy' manually with proxy."
+  echo ""
+fi
+
 echo "Step 1: Building and pushing image..."
 gcloud builds submit \
   --tag "${IMAGE_NAME}" \
