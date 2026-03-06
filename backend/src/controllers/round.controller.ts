@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { RoundService } from '../services/round.service';
 import { LeaderboardService } from '../services/leaderboard.service';
+import { logWorkout } from '../services/workout.service';
 import { AuthRequest, ApiResponse } from '../types';
 
 function param(req: AuthRequest, key: string): string | undefined {
@@ -118,5 +119,25 @@ export class RoundController {
     const type = (req.query?.type === 'teams' ? 'teams' : 'individuals') as 'individuals' | 'teams';
     const data = await LeaderboardService.getLeaderboard(roundId, userId, type);
     res.json({ success: true, data } as ApiResponse);
+  }
+
+  /** POST /rounds/:roundId/workouts — log workout, create Workout + ScoreLedger (FITCLUB_MASTER_SPEC §6.3). */
+  static async logWorkout(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const roundId = param(req, 'roundId');
+    if (!roundId) {
+      res.status(400).json({ success: false, error: 'Round ID required.' } as ApiResponse);
+      return;
+    }
+    const body = req.body || {};
+    const result = await logWorkout(roundId, userId, {
+      activityType: body.activityType,
+      durationMinutes: body.durationMinutes,
+      distanceKm: body.distanceKm,
+      proofUrl: body.proofUrl,
+      note: body.note,
+      loggedAt: body.loggedAt,
+    });
+    res.status(201).json({ success: true, data: { id: result.id, points: result.points } } as ApiResponse);
   }
 }

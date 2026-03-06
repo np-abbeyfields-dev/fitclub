@@ -147,6 +147,6 @@ const styles = StyleSheet.create({
   card: {},
   badge: {},
   actions: {},
-  primaryBtn: { alignItems: 'center' },
+  primaryBtn: { alignItems: 'center', justifyContent: 'center' },
   secondaryBtn: { alignItems: 'center' },
 });

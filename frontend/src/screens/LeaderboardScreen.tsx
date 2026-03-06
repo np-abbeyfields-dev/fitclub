@@ -44,6 +44,8 @@ export default function LeaderboardScreen() {
   const [roundDaysLeft, setRoundDaysLeft] = useState<number>(0);
   const [individuals, setIndividuals] = useState<LeaderboardEntry[]>([]);
   const [teams, setTeams] = useState<LeaderboardEntry[]>([]);
+  const prevIndRanks = React.useRef<Map<string, number>>(new Map());
+  const prevTeamRanks = React.useRef<Map<string, number>>(new Map());
 
   const loadLeaderboard = useCallback(async () => {
     if (!selectedClub) {
@@ -52,6 +54,8 @@ export default function LeaderboardScreen() {
       setRoundDaysLeft(0);
       setIndividuals([]);
       setTeams([]);
+      prevIndRanks.current = new Map();
+      prevTeamRanks.current = new Map();
       setLoading(false);
       return;
     }
@@ -73,8 +77,26 @@ export default function LeaderboardScreen() {
         ]);
         const maxInd = indRes.data?.length ? Math.max(...indRes.data.map((e) => e.points)) : 0;
         const maxTeam = teamRes.data?.length ? Math.max(...teamRes.data.map((e) => e.points)) : 0;
-        setIndividuals((indRes.data ?? []).map((e) => ({ ...e, maxPoints: maxInd || e.points })));
-        setTeams((teamRes.data ?? []).map((e) => ({ ...e, maxPoints: maxTeam || e.points })));
+        const indList = (indRes.data ?? []).map((e, i) => ({
+          ...e,
+          rank: i + 1,
+          maxPoints: maxInd || e.points,
+          rankChange: prevIndRanks.current.has(e.id)
+            ? prevIndRanks.current.get(e.id)! - (i + 1)
+            : undefined,
+        }));
+        const teamList = (teamRes.data ?? []).map((e, i) => ({
+          ...e,
+          rank: i + 1,
+          maxPoints: maxTeam || e.points,
+          rankChange: prevTeamRanks.current.has(e.id)
+            ? prevTeamRanks.current.get(e.id)! - (i + 1)
+            : undefined,
+        }));
+        prevIndRanks.current = new Map(indList.map((e) => [e.id, e.rank]));
+        prevTeamRanks.current = new Map(teamList.map((e) => [e.id, e.rank]));
+        setIndividuals(indList);
+        setTeams(teamList);
       }
     } catch {
       setIndividuals([]);
@@ -218,14 +240,14 @@ export default function LeaderboardScreen() {
             {myEntry.rank === 1 ? (
               <>
                 <Ionicons name="trophy" size={16} color={colors.accent} />
-                <Text style={[typography.label, { color: colors.text, fontWeight: '800', marginLeft: 6 }]}>
+                <Text style={[typography.label, { color: colors.textPrimary, fontWeight: '800', marginLeft: s.sm }]}>
                   You're leading
                 </Text>
               </>
             ) : (
               <>
                 <Ionicons name="trophy-outline" size={14} color={colors.primary} />
-                <Text style={[typography.caption, { color: colors.text, fontWeight: '700', marginLeft: 4 }]}>
+                <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '700', marginLeft: s.xxs }]}>
                   {gapToFirst.toLocaleString()} pts to #1
                 </Text>
               </>
@@ -233,7 +255,7 @@ export default function LeaderboardScreen() {
           </View>
         )}
 
-        <View style={[styles.segmentWrap, { flexDirection: 'row', backgroundColor: colors.card, borderRadius: r.sm, padding: 2, marginBottom: s.sm, borderWidth: 1, borderColor: colors.border }]}>
+        <View style={[styles.segmentWrap, { flexDirection: 'row', backgroundColor: colors.card, borderRadius: r.md, padding: s.xxs, marginBottom: s.sm, borderWidth: 1, borderColor: colors.border, ...shadows.card }]}>
           <TouchableOpacity
             onPress={() => onTabChange('teams')}
             activeOpacity={0.85}
@@ -247,8 +269,8 @@ export default function LeaderboardScreen() {
               },
             ]}
           >
-            <Ionicons name="people" size={18} color={tab === 'teams' ? colors.heroText : colors.textSecondary} />
-            <Text style={[typography.label, { fontWeight: '700', color: tab === 'teams' ? colors.heroText : colors.text }]}>
+            <Ionicons name="people" size={18} color={tab === 'teams' ? colors.textInverse : colors.textSecondary} />
+            <Text style={[typography.label, { fontWeight: '700', color: tab === 'teams' ? colors.textInverse : colors.textPrimary }]}>
               Teams
             </Text>
           </TouchableOpacity>
@@ -265,8 +287,8 @@ export default function LeaderboardScreen() {
               },
             ]}
           >
-            <Ionicons name="person" size={18} color={tab === 'individuals' ? colors.heroText : colors.textSecondary} />
-            <Text style={[typography.label, { fontWeight: '700', color: tab === 'individuals' ? colors.heroText : colors.text }]}>
+            <Ionicons name="person" size={18} color={tab === 'individuals' ? colors.textInverse : colors.textSecondary} />
+            <Text style={[typography.label, { fontWeight: '700', color: tab === 'individuals' ? colors.textInverse : colors.textPrimary }]}>
               Individuals
             </Text>
           </TouchableOpacity>
@@ -291,16 +313,16 @@ export default function LeaderboardScreen() {
                       borderBottomRightRadius: r.sm,
                       justifyContent: 'flex-end',
                       paddingBottom: s.xs,
-                      marginTop: 4,
-                      ...shadows.sm,
+                      marginTop: s.xxs,
+                      ...shadows.card,
                     },
                   ]}
                 >
                   <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>#2</Text>
-                  <Text style={[typography.caption, { color: colors.text, fontWeight: '800' }]} numberOfLines={1}>
+                  <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
                     {top3.find((e) => e.rank === 2)!.name}
                   </Text>
-                  <Text style={[typography.label, { color: colors.text, fontWeight: '800' }]}>
+                  <Text style={[typography.label, { color: colors.competition, fontWeight: '800' }]}>
                     {top3.find((e) => e.rank === 2)!.points.toLocaleString()}
                   </Text>
                 </View>
@@ -322,16 +344,16 @@ export default function LeaderboardScreen() {
                       borderBottomRightRadius: r.sm,
                       justifyContent: 'flex-end',
                       paddingBottom: s.xs,
-                      marginTop: 4,
-                      ...shadows.md,
+                      marginTop: s.xxs,
+                      ...shadows.card,
                     },
                   ]}
                 >
                   <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>#1</Text>
-                  <Text style={[typography.caption, { color: colors.text, fontWeight: '800' }]} numberOfLines={1}>
+                  <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
                     {top3.find((e) => e.rank === 1)!.name}
                   </Text>
-                  <Text style={[typography.label, { color: colors.primary, fontWeight: '800' }]}>
+                  <Text style={[typography.label, { color: colors.competition, fontWeight: '800' }]}>
                     {top3.find((e) => e.rank === 1)!.points.toLocaleString()}
                   </Text>
                 </View>
@@ -353,16 +375,16 @@ export default function LeaderboardScreen() {
                       borderBottomRightRadius: r.sm,
                       justifyContent: 'flex-end',
                       paddingBottom: s.xs,
-                      marginTop: 4,
-                      ...shadows.sm,
+                      marginTop: s.xxs,
+                      ...shadows.card,
                     },
                   ]}
                 >
                   <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>#3</Text>
-                  <Text style={[typography.caption, { color: colors.text, fontWeight: '800' }]} numberOfLines={1}>
+                  <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
                     {top3.find((e) => e.rank === 3)!.name}
                   </Text>
-                  <Text style={[typography.label, { color: colors.text, fontWeight: '800' }]}>
+                  <Text style={[typography.label, { color: colors.competition, fontWeight: '800' }]}>
                     {top3.find((e) => e.rank === 3)!.points.toLocaleString()}
                   </Text>
                 </View>
@@ -393,27 +415,44 @@ export default function LeaderboardScreen() {
                 paddingHorizontal: s.sm,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
-                backgroundColor: item.isCurrentUser ? colors.accentMuted : 'transparent',
+                backgroundColor: item.isCurrentUser ? colors.accentMuted : colors.transparent,
                 marginBottom: 0,
               },
             ]}
           >
-            <Text style={[typography.bodySmall, { fontWeight: '800', color: colors.text, width: 32 }]}>
-              #{item.rank}
-            </Text>
-            <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[typography.body, { fontWeight: '700', color: colors.text }]} numberOfLines={1}>
+            <View style={{ width: 32, alignItems: 'center' }}>
+              <Text style={[typography.bodySmall, { fontWeight: '800', color: colors.textPrimary }]}>
+                #{item.rank}
+              </Text>
+              {item.rankChange != null && item.rankChange !== 0 && (
+                <Text
+                  style={[
+                    typography.caption,
+                    {
+                      fontWeight: '800',
+                      fontSize: 10,
+                      color: item.rankChange > 0 ? colors.success : colors.danger,
+                      marginTop: 1,
+                    },
+                  ]}
+                >
+                  {item.rankChange > 0 ? `▲${item.rankChange}` : `▼${Math.abs(item.rankChange)}`}
+                </Text>
+              )}
+            </View>
+            <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: s.sm }}>
+              <Text style={[typography.body, { fontWeight: '700', color: colors.textPrimary }]} numberOfLines={1}>
                 {item.name}
               </Text>
               {item.isCurrentUser && (
-                <View style={{ backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                <View style={{ backgroundColor: colors.energy, paddingHorizontal: s.xs, paddingVertical: s.xxs, borderRadius: r.sm }}>
                   <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700', fontSize: 10 }]}>
                     {tab === 'teams' ? 'Your Team' : 'You'}
                   </Text>
                 </View>
               )}
             </View>
-            <Text style={[typography.label, { fontWeight: '800', color: colors.text, textAlign: 'right', minWidth: 56 }]}>
+            <Text style={[typography.label, { fontWeight: '800', color: colors.energy, textAlign: 'right', minWidth: 56 }]}>
               {item.points.toLocaleString()}
             </Text>
           </View>

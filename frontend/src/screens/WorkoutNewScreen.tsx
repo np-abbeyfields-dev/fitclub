@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import type { HomeStackParamList } from '../navigation/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -19,7 +20,7 @@ import { useClub } from '../context/ClubContext';
 import { useDashboardStore } from '../store/dashboardStore';
 import { clubService } from '../services/clubService';
 import { workoutService, type WorkoutActivity, type LogWorkoutPayload } from '../services/workoutService';
-import { getInputConfig, getPointsPreview } from '../config/workoutInputMap';
+import { getInputConfig, getPointsPreview, DEFAULT_ACTIVITY_TYPES } from '../config/workoutInputMap';
 import type { RecentWorkout } from '../types/dashboard';
 
 const STEP_DURATION = 5;
@@ -28,10 +29,12 @@ const STEP_DISTANCE = 0.5;
 export default function WorkoutNewScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<HomeStackParamList, 'WorkoutNew'>>();
   const insets = useSafeAreaInsets();
   const { colors, spacing: s, radius: r, typography, shadows } = theme;
   const { selectedClub } = useClub();
   const { lastLoggedWorkout, setLastLoggedWorkout, optimisticallyAddWorkout } = useDashboardStore();
+  const repeatLastIntent = route.params?.repeatLast === true;
 
   const [activities, setActivities] = useState<WorkoutActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
@@ -58,9 +61,32 @@ export default function WorkoutNewScreen() {
     setActivitiesError(null);
     try {
       const res = await workoutService.listActivities();
-      if (res.success && res.data) setActivities(res.data);
+      if (res.success && res.data && res.data.length > 0) {
+        setActivities(res.data);
+      } else {
+        // Fallback when API returns empty (e.g. generic_workout_met not seeded)
+        setActivities(
+          DEFAULT_ACTIVITY_TYPES.map((workoutType, i) => ({
+            id: i + 1,
+            workoutType,
+            metCap: null,
+            avgMetPerHour: null,
+            maxMetLimit: null,
+          }))
+        );
+      }
     } catch (err) {
       setActivitiesError(err instanceof Error ? err.message : 'Failed to load activities');
+      // Still show fallback so the page is usable offline or when API fails
+      setActivities(
+        DEFAULT_ACTIVITY_TYPES.map((workoutType, i) => ({
+          id: i + 1,
+          workoutType,
+          metCap: null,
+          avgMetPerHour: null,
+          maxMetLimit: null,
+        }))
+      );
     } finally {
       setActivitiesLoading(false);
     }
@@ -231,6 +257,7 @@ export default function WorkoutNewScreen() {
       setDistance('');
     }
     setSubmitError(null);
+    (navigation as any).setParams?.({ repeatLast: false });
   };
 
   const stepUp = () => {
@@ -261,9 +288,9 @@ export default function WorkoutNewScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboard}>
         <View style={[styles.header, { paddingTop: insets.top + s.sm, paddingBottom: s.sm, paddingHorizontal: s.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.card }]}>
           <TouchableOpacity onPress={goBack} hitSlop={12} activeOpacity={0.8}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={[typography.h3, { color: colors.text, fontWeight: '800' }]}>Log Workout</Text>
+          <Text style={[typography.h3, { color: colors.textPrimary, fontWeight: '800' }]}>Log Workout</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -273,13 +300,63 @@ export default function WorkoutNewScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* 1. Quick Log */}
-          {lastWorkout && activeRoundId && (
-            <View style={[styles.quickLogCard, { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.primary, borderRadius: r.sm, padding: s.md, marginBottom: s.sm, ...shadows.sm }]}>
-              <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', marginBottom: 4 }]}>Last logged</Text>
+          {/* One-tap repeat banner when opened from Home Quick Log */}
+          {repeatLastIntent && lastWorkout && activeRoundId && (
+            <View
+              style={[
+                styles.oneTapRepeatBanner,
+                {
+                  backgroundColor: colors.primaryMuted ?? colors.primarySoft,
+                  borderWidth: 2,
+                  borderColor: colors.primary,
+                  borderRadius: r.md,
+                  padding: s.sm,
+                  marginBottom: s.sm,
+                  ...shadows.card,
+                },
+              ]}
+            >
+              <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', marginBottom: s.xxs }]}>
+                Log same workout?
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: s.xs }}>
+                <Text style={[typography.label, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
+                  {lastWorkout.activityType}
+                  {(lastWorkout.durationMinutes != null || lastWorkout.distanceKm != null) && (
+                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
+                      {' '}· {lastWorkout.durationMinutes != null ? `${lastWorkout.durationMinutes} min` : `${lastWorkout.distanceKm} km`}
+                    </Text>
+                  )}
+                  <Text style={[typography.caption, { color: colors.energy, fontWeight: '700' }]}> +{lastWorkout.points} pts</Text>
+                </Text>
+                <View style={{ flexDirection: 'row', gap: s.xs }}>
+                  <TouchableOpacity
+                    onPress={handleRepeat}
+                    disabled={submitting || atOrOverCap}
+                    style={[styles.quickLogBtn, { backgroundColor: colors.primary, borderRadius: r.sm, paddingVertical: s.xs, paddingHorizontal: s.sm }]}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '800' }]}>Log</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleEditFromQuickLog}
+                    style={[styles.quickLogBtn, { backgroundColor: colors.border, borderRadius: r.sm, paddingVertical: s.xs, paddingHorizontal: s.sm }]}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={[typography.caption, { color: colors.text, fontWeight: '700' }]}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* 1. Quick Log (when not from one-tap intent) */}
+          {!repeatLastIntent && lastWorkout && activeRoundId && (
+            <View style={[styles.quickLogCard, { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.primary, borderRadius: r.md, padding: s.md, marginBottom: s.sm, ...shadows.card }]}>
+              <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', marginBottom: s.xxs }]}>Last logged</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: s.xs }}>
                 <View>
-                  <Text style={[typography.label, { color: colors.text, fontWeight: '800' }]} numberOfLines={1}>{lastWorkout.activityType}</Text>
+                  <Text style={[typography.label, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>{lastWorkout.activityType}</Text>
                   <Text style={[typography.caption, { color: colors.accent, fontWeight: '700' }]}>
                     +{lastWorkout.points} pts
                     {(lastWorkout.durationMinutes != null || lastWorkout.distanceKm != null) && (
@@ -302,7 +379,7 @@ export default function WorkoutNewScreen() {
           )}
 
           {/* 2. Activity type — pill cards */}
-          <Text style={[styles.sectionLabel, { color: colors.text, fontWeight: '800', marginBottom: s.xs }]}>Activity type</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textPrimary, fontWeight: '800', marginBottom: s.xs }]}>Activity type</Text>
           {activitiesLoading ? (
             <View style={[styles.loadingWrap, { paddingVertical: s.lg }]}>
               <ActivityIndicator size="small" color={colors.primary} />
@@ -334,7 +411,7 @@ export default function WorkoutNewScreen() {
                     ]}
                   >
                     <Ionicons name={config.icon} size={22} color={selected ? colors.heroText : colors.textSecondary} />
-                    <Text style={[typography.caption, { color: selected ? colors.heroText : colors.text, fontWeight: '800', marginLeft: 6 }]} numberOfLines={1}>{a.workoutType}</Text>
+                    <Text style={[typography.caption, { color: selected ? colors.textInverse : colors.textPrimary, fontWeight: '800', marginLeft: s.sm }]} numberOfLines={1}>{a.workoutType}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -344,30 +421,30 @@ export default function WorkoutNewScreen() {
           {/* 3. Dynamic inputs + stepper */}
           {inputConfig && selectedType && (
             <>
-              <Text style={[styles.sectionLabel, { color: colors.text, fontWeight: '800', marginTop: s.md, marginBottom: s.xs }]}>
+              <Text style={[styles.sectionLabel, { color: colors.textPrimary, fontWeight: '800', marginTop: s.md, marginBottom: s.xs }]}>
                 {inputConfig.inputType === 'distance' ? 'Distance' : 'Duration'}
               </Text>
-              <View style={[styles.inputRow, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: r.sm, borderWidth: 1, ...shadows.sm }]}>
+              <View style={[styles.inputRow, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: r.md, borderWidth: 1, ...shadows.card }]}>
                 <TouchableOpacity onPress={stepDown} style={[styles.stepperBtn, { borderRightWidth: 1, borderRightColor: colors.border }]} activeOpacity={0.8}>
-                  <Ionicons name="remove" size={28} color={colors.text} />
+                  <Ionicons name="remove" size={28} color={colors.textPrimary} />
                 </TouchableOpacity>
                 <TextInput
                   value={isDistance ? distance : duration}
                   onChangeText={isDistance ? setDistance : setDuration}
                   placeholder={isDistance ? '0.0' : '0'}
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={colors.textSecondary}
                   keyboardType={isDistance ? 'decimal-pad' : 'number-pad'}
-                  style={[styles.bigInput, { color: colors.text }]}
+                  style={[styles.bigInput, { color: colors.textPrimary }]}
                 />
                 <View style={[styles.unitBadge, { backgroundColor: colors.border }]}>
-                  <Text style={[typography.label, { color: colors.text, fontWeight: '800' }]}>{inputConfig.unit}</Text>
+                  <Text style={[typography.label, { color: colors.textPrimary, fontWeight: '800' }]}>{inputConfig.unit}</Text>
                 </View>
                 <TouchableOpacity onPress={stepUp} style={[styles.stepperBtn, { borderLeftWidth: 1, borderLeftColor: colors.border }]} activeOpacity={0.8}>
-                  <Ionicons name="add" size={28} color={colors.text} />
+                  <Ionicons name="add" size={28} color={colors.textPrimary} />
                 </TouchableOpacity>
               </View>
               {(isDistance ? parseFloat(distance) <= 0 : (parseInt(duration, 10) || 0) <= 0) && (isDistance ? distance.trim() : duration.trim()) && (
-                <Text style={[typography.caption, { color: colors.error, marginTop: 4, fontWeight: '600' }]}>Enter a value greater than 0</Text>
+                <Text style={[typography.caption, { color: colors.error, marginTop: s.xxs, fontWeight: '600' }]}>Enter a value greater than 0</Text>
               )}
               {dailyCap != null && (
                 <View style={[styles.capRow, { marginTop: s.sm }]}>
@@ -382,8 +459,8 @@ export default function WorkoutNewScreen() {
               )}
 
               {/* 4. Live points preview */}
-              <View style={[styles.pointsPreview, { marginTop: s.md, backgroundColor: colors.card, borderWidth: 2, borderColor: colors.accent, borderRadius: r.sm, paddingVertical: s.md, ...shadows.sm }]}>
-                <Text style={[styles.pointsValue, { color: colors.accent, fontWeight: '800' }]}>+{dailyCap != null ? pointsAfterSubmit : points} pts</Text>
+              <View style={[styles.pointsPreview, { marginTop: s.md, backgroundColor: colors.card, borderWidth: 2, borderColor: colors.energy, borderRadius: r.md, paddingVertical: s.md, ...shadows.card }]}>
+                <Text style={[typography.metric, { color: colors.energy }]}>+{dailyCap != null ? pointsAfterSubmit : points} pts</Text>
               </View>
 
               {/* 5. Optional — collapsed */}
@@ -393,8 +470,8 @@ export default function WorkoutNewScreen() {
               </TouchableOpacity>
               {optionalExpanded && (
                 <View style={{ marginTop: s.xs }}>
-                  <TextInput value={note} onChangeText={setNote} placeholder="Add a note" placeholderTextColor={colors.textMuted} style={[styles.noteInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} multiline />
-                  <TouchableOpacity onPress={() => setHasProof(!hasProof)} style={[styles.proofBtn, { backgroundColor: hasProof ? colors.accentMuted : colors.card, borderColor: hasProof ? colors.accent : colors.border, marginTop: s.sm }]} activeOpacity={0.8}>
+                  <TextInput value={note} onChangeText={setNote} placeholder="Add a note" placeholderTextColor={colors.textSecondary} style={[styles.noteInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.textPrimary, borderRadius: r.sm, padding: s.sm, minHeight: 72 }]} multiline />
+                  <TouchableOpacity onPress={() => setHasProof(!hasProof)} style={[styles.proofBtn, { backgroundColor: hasProof ? colors.accentMuted : colors.card, borderColor: hasProof ? colors.energy : colors.border, marginTop: s.sm, gap: s.sm, paddingVertical: s.sm, borderRadius: r.sm }]} activeOpacity={0.8}>
                     <Ionicons name={hasProof ? 'checkmark-circle' : 'cloud-upload-outline'} size={20} color={hasProof ? colors.accent : colors.textSecondary} />
                     <Text style={[typography.caption, { color: hasProof ? colors.accent : colors.textSecondary, fontWeight: '600' }]}>{hasProof ? 'Proof added' : 'Upload proof'}</Text>
                   </TouchableOpacity>
@@ -423,8 +500,8 @@ export default function WorkoutNewScreen() {
       {successPoints != null && (
         <Animated.View style={[styles.successOverlay, { backgroundColor: colors.surface, opacity: successOpacity }]} pointerEvents="box-none">
           <Animated.View style={[styles.successContent, { transform: [{ scale: successScale }] }]}>
-            <Text style={[styles.successPts, { color: colors.accent }]}>+{successPoints} pts</Text>
-            {streakMessage && <Text style={[typography.label, { color: colors.text, marginTop: s.xs }]}>🔥 {streakMessage}</Text>}
+            <Text style={[typography.metric, { color: colors.energy }]}>+{successPoints} pts</Text>
+            {streakMessage && <Text style={[typography.label, { color: colors.textPrimary, marginTop: s.xs }]}>🔥 {streakMessage}</Text>}
             {!streakMessage && <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xs }]}>Logged</Text>}
           </Animated.View>
         </Animated.View>
@@ -441,6 +518,7 @@ const styles = StyleSheet.create({
   scrollContent: {},
   sectionLabel: {},
   quickLogCard: {},
+  oneTapRepeatBanner: {},
   quickLogBtn: {},
   loadingWrap: { flexDirection: 'row', alignItems: 'center' },
   pillRow: { paddingHorizontal: 2 },
@@ -453,8 +531,8 @@ const styles = StyleSheet.create({
   pointsPreview: { alignItems: 'center' },
   pointsValue: { fontSize: 36 },
   optionalToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  noteInput: { borderWidth: 1, borderRadius: 6, padding: 12, minHeight: 72, fontSize: 14 },
-  proofBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 6, borderWidth: 1 },
+  noteInput: { borderWidth: 1, minHeight: 72, fontSize: 14 },
+  proofBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   footer: {},
   cta: { alignItems: 'center', justifyContent: 'center' },
   successOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },

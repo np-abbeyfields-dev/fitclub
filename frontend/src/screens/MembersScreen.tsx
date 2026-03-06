@@ -16,7 +16,7 @@ import { useTheme } from '../theme';
 import { Card } from '../components';
 import { useClub } from '../context/ClubContext';
 import { useAuthStore } from '../store/authStore';
-import { clubService, type ClubMember } from '../services/clubService';
+import { clubService, type ClubMember, type ClubRole } from '../services/clubService';
 import { roundService } from '../services/roundService';
 
 export default function MembersScreen() {
@@ -70,7 +70,7 @@ export default function MembersScreen() {
     await Promise.all([refreshClubs(), load()]);
   }, [refreshClubs, load]);
 
-  const setRole = useCallback(async (userId: string, role: 'admin' | 'member') => {
+  const setRole = useCallback(async (userId: string, role: ClubRole) => {
     if (!selectedClub) return;
     setActioningId(userId);
     try {
@@ -140,7 +140,7 @@ export default function MembersScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { padding: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xxxl }]}
+      contentContainerStyle={[styles.content, { padding: spacing.md, paddingTop: insets.top + spacing.md, paddingBottom: spacing.xxxl }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       showsVerticalScrollIndicator={false}
     >
@@ -183,8 +183,10 @@ export default function MembersScreen() {
                     {m.email}
                   </Text>
                   <View style={[styles.metaRow, { marginTop: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }]}>
-                    <View style={[styles.roleBadge, { backgroundColor: m.role === 'admin' ? colors.primaryMuted : colors.borderLight, paddingHorizontal: spacing.xs, paddingVertical: 2, borderRadius: radius.sm }]}>
-                      <Text style={[typography.caption, { fontWeight: '600', color: m.role === 'admin' ? colors.primary : colors.textSecondary }]}>{m.role}</Text>
+                    <View style={[styles.roleBadge, { backgroundColor: m.role === 'admin' ? colors.primaryMuted : m.role === 'team_lead' ? colors.accentMuted : colors.borderLight, paddingHorizontal: spacing.xs, paddingVertical: 2, borderRadius: radius.sm }]}>
+                      <Text style={[typography.caption, { fontWeight: '600', color: m.role === 'admin' ? colors.primary : m.role === 'team_lead' ? colors.accent : colors.textSecondary }]}>
+                        {m.role === 'team_lead' ? 'Team Lead' : m.role === 'admin' ? 'Admin' : 'Member'}
+                      </Text>
                     </View>
                     {activeRoundId && m.team && (
                       <View style={[styles.teamBadge, { backgroundColor: colors.accentMuted, paddingHorizontal: spacing.xs, paddingVertical: 2, borderRadius: radius.sm }]}>
@@ -194,24 +196,18 @@ export default function MembersScreen() {
                   </View>
                 </View>
                 {!isYou && (
-                  <View style={[styles.actions, { flexDirection: 'row', alignItems: 'center', gap: spacing.xs }]}>
-                    {m.role === 'member' ? (
+                  <View style={[styles.actions, { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }]}>
+                    {busy && <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: spacing.xs }} />}
+                    {(['admin', 'team_lead', 'member'] as const).map((r) => (
                       <TouchableOpacity
-                        style={[styles.iconBtn, { padding: spacing.xs }]}
-                        onPress={() => setRole(m.userId, 'admin')}
+                        key={r}
+                        style={[styles.roleChip, { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, borderWidth: 1, borderColor: m.role === r ? colors.primary : colors.border, backgroundColor: m.role === r ? colors.primaryMuted : 'transparent' }]}
+                        onPress={() => setRole(m.userId, r)}
                         disabled={busy}
                       >
-                        {busy ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="arrow-up-circle-outline" size={22} color={colors.primary} />}
+                        <Text style={[typography.caption, { fontWeight: '600', color: m.role === r ? colors.primary : colors.textSecondary }]}>{r === 'team_lead' ? 'Team Lead' : r === 'admin' ? 'Admin' : 'Member'}</Text>
                       </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        style={[styles.iconBtn, { padding: spacing.xs }]}
-                        onPress={() => setRole(m.userId, 'member')}
-                        disabled={busy}
-                      >
-                        {busy ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="arrow-down-circle-outline" size={22} color={colors.textSecondary} />}
-                      </TouchableOpacity>
-                    )}
+                    ))}
                     <TouchableOpacity
                       style={[styles.iconBtn, { padding: spacing.xs }]}
                       onPress={() => removeMember(m)}
@@ -251,5 +247,6 @@ const styles = StyleSheet.create({
   teamBadge: {},
   actions: {},
   iconBtn: {},
+  roleChip: {},
   empty: { alignItems: 'center', justifyContent: 'center' },
 });

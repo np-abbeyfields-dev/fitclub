@@ -7,7 +7,12 @@ type ClubContextValue = {
   selectedClub: ClubWithRole | null;
   setSelectedClub: (club: ClubWithRole | null) => void;
   refreshClubs: () => Promise<void>;
+  /** Role from ClubMembership; never from User. */
+  role: 'admin' | 'team_lead' | 'member' | null;
   isAdmin: boolean;
+  isTeamLead: boolean;
+  /** Can add/remove team members: admin or team_lead. */
+  canManageTeam: boolean;
   isLoading: boolean;
 };
 
@@ -57,7 +62,10 @@ export function ClubProvider({ children }: { children: React.ReactNode }) {
     selectedClub,
     setSelectedClub,
     refreshClubs,
+    role: selectedClub?.role ?? null,
     isAdmin: selectedClub?.role === 'admin',
+    isTeamLead: selectedClub?.role === 'team_lead',
+    canManageTeam: selectedClub?.role === 'admin' || selectedClub?.role === 'team_lead',
     isLoading,
   };
 

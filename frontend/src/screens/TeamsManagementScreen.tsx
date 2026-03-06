@@ -226,7 +226,7 @@ export default function TeamsManagementScreen() {
             </View>
           </View>
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: colors.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }]}
+            style={[styles.primaryBtn, { backgroundColor: colors.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }]}
             onPress={openCreateModal}
           >
             <Ionicons name="add" size={20} color={colors.textInverse} />
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   chip: {},
   emptyCard: { alignItems: 'center' },
   empty: { alignItems: 'center', justifyContent: 'center' },
-  primaryBtn: {},
+  primaryBtn: { alignItems: 'center', justifyContent: 'center' },
   secondaryBtn: {},
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalBox: { width: '100%', maxWidth: 420 },

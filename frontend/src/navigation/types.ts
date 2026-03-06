@@ -1,10 +1,9 @@
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-/** Root stack: main app (tabs + workout + settings + leaderboard + admin) */
+/** Root stack: main app (tabs + settings + leaderboard + admin). WorkoutNew lives in HomeStack so tab bar stays visible. */
 export type RootStackParamList = {
   MainTabs: undefined;
-  WorkoutNew: undefined;
   Settings: undefined;
   PastRounds: undefined;
   RoundLeaderboard: { roundId: string; roundName: string };
@@ -22,11 +21,12 @@ export type MainTabParamList = {
   ProfileTab: undefined;
 };
 
-/** Home tab stack (Home, JoinClub, CreateClub live here for tab bar to stay visible) */
+/** Home tab stack (Home, JoinClub, CreateClub, WorkoutNew — tab bar stays visible) */
 export type HomeStackParamList = {
   Home: undefined;
   JoinClub: undefined;
   CreateClub: undefined;
+  WorkoutNew: { repeatLast?: boolean } | undefined;
 };
 
 /** Web app sidebar routes (stack navigator when Platform.OS === 'web') */

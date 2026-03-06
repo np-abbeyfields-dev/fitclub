@@ -67,23 +67,23 @@ export function CircularProgressRing({
   const circumference = 2 * Math.PI * r;
   const strokeDashoffset = circumference * (1 - animatedProgress);
 
-  const progressStroke = gradient ? `url(#${GRADIENT_ID})` : colors.accent;
+  const progressStroke = gradient ? `url(#${GRADIENT_ID})` : colors.energy;
 
   return (
     <View style={[styles.wrap, { width: size, height: size }]}>
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <Defs>
           <LinearGradient id={GRADIENT_ID} x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor={colors.accent} />
+            <Stop offset="0%" stopColor={colors.energy} />
             <Stop offset="100%" stopColor={colors.primary} />
           </LinearGradient>
         </Defs>
-        {/* Track */}
+        {/* Track (inactive) */}
         <Circle
           cx={cx}
           cy={cx}
           r={r}
-          stroke={colors.border}
+          stroke={colors.chartInactive}
           strokeWidth={strokeWidth}
           fill={colors.transparent}
         />
@@ -94,7 +94,7 @@ export function CircularProgressRing({
               cx={cx}
               cy={cx}
               r={r}
-              stroke={colors.accent}
+              stroke={colors.energy}
               strokeWidth={strokeWidth + GLOW_STROKE_BONUS}
               fill={colors.transparent}
               strokeDasharray={`${circumference} ${circumference}`}

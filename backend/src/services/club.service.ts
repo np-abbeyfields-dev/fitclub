@@ -67,17 +67,20 @@ export class ClubService {
     return { ...rest, role: m.role, ...(m.role === 'admin' ? { inviteCode } : {}) };
   }
 
-  static async ensureMember(userId: string, clubId: string, role?: 'admin' | 'member') {
+  /** Roles are derived from ClubMembership only; never stored on User. */
+  static async ensureMember(userId: string, clubId: string, requireRole?: 'admin' | 'team_lead' | 'member') {
     const m = await prisma.clubMembership.findUnique({
       where: { userId_clubId: { userId, clubId } },
     });
     if (!m) throw new AuthorizationError('You are not a member of this club.');
-    if (role === 'admin' && m.role !== 'admin') throw new AuthorizationError('Admin access required.');
+    if (requireRole === 'admin' && m.role !== 'admin') throw new AuthorizationError('Admin access required.');
+    if (requireRole === 'team_lead' && m.role !== 'admin' && m.role !== 'team_lead')
+      throw new AuthorizationError('Team lead or admin access required.');
     return m;
   }
 
-  /** Admin only. Set another member's role (promote/demote). */
-  static async setMemberRole(clubId: string, adminUserId: string, targetUserId: string, newRole: 'admin' | 'member') {
+  /** Admin only. Set another member's role (promote/demote). Assign team leads. */
+  static async setMemberRole(clubId: string, adminUserId: string, targetUserId: string, newRole: 'admin' | 'team_lead' | 'member') {
     await this.ensureMember(adminUserId, clubId, 'admin');
     const target = await prisma.clubMembership.findUnique({
       where: { userId_clubId: { userId: targetUserId, clubId } },
@@ -141,7 +144,7 @@ export class ClubService {
     });
     if (!target) throw new NotFoundError('Member not found in this club.');
     const adminCount = await prisma.clubMembership.count({
-      where: { clubId, role: 'admin' },
+      where: { clubId, role: 'admin' as const },
     });
     if (target.role === 'admin' && adminCount <= 1) {
       throw new ValidationError('Cannot remove the last admin.');

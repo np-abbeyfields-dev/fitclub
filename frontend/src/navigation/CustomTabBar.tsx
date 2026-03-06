@@ -55,7 +55,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
   };
 
   const onFABPress = () => {
-    navigation.getParent()?.navigate('WorkoutNew');
+    navigation.getParent()?.navigate('HomeTab', { screen: 'WorkoutNew' });
   };
 
   const tabBarHeight = 64 + insets.bottom;
@@ -95,7 +95,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           style={[
             styles.tabInner,
             {
-              backgroundColor: isFocused ? colors.primary : 'transparent',
+              backgroundColor: 'transparent',
               borderRadius: r.sm,
               paddingVertical: 6,
               paddingHorizontal: 10,
@@ -106,7 +106,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             <Ionicons
               name={isFocused ? icons.filled : icons.outline}
               size={22}
-              color={isFocused ? colors.heroText : colors.textSecondary}
+              color={isFocused ? colors.primary : colors.textSecondary}
             />
             {badge != null && (
               <View style={[styles.badge, { backgroundColor: colors.error }]}>
@@ -120,7 +120,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             style={[
               styles.label,
               {
-                color: isFocused ? colors.heroText : colors.textSecondary,
+                color: isFocused ? colors.primary : colors.textSecondary,
                 fontWeight: isFocused ? '800' : '600',
               },
             ]}
@@ -165,9 +165,9 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                   width: FAB_SIZE,
                   height: FAB_SIZE,
                   borderRadius: FAB_SIZE / 2,
-                  backgroundColor: colors.primary,
+                  backgroundColor: colors.success,
                   borderWidth: 3,
-                  borderColor: colors.primaryHover ?? colors.primary,
+                  borderColor: colors.success,
                   shadowColor: colors.shadowColor,
                   shadowOffset: { width: 0, height: 6 },
                   shadowOpacity: 0.35,
@@ -177,7 +177,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                 },
               ]}
             >
-              <Ionicons name="add" size={30} color={colors.heroText} />
+              <Ionicons name="add" size={30} color="#FFFFFF" />
             </Animated.View>
           </TouchableOpacity>
           <Text style={[styles.fabLabel, { color: colors.textSecondary, fontWeight: '700' }]}>Log</Text>

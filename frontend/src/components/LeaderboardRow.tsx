@@ -40,9 +40,26 @@ export function LeaderboardRow({ item }: LeaderboardRowProps) {
         {isTop3 ? (
           <Text style={styles.medal}>{RANK_MEDAL[item.rank as 1 | 2 | 3]}</Text>
         ) : (
-          <Text style={[styles.rankNum, { ...typography.bodySmall, fontWeight: '700', color: colors.textSecondary }]}>
-            #{item.rank}
-          </Text>
+          <View style={styles.rankWithChange}>
+            <Text style={[styles.rankNum, { ...typography.bodySmall, fontWeight: '700', color: colors.competition }]}>
+              #{item.rank}
+            </Text>
+            {item.rankChange != null && item.rankChange !== 0 && (
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    fontWeight: '800',
+                    color: item.rankChange > 0 ? colors.success : colors.danger,
+                    fontSize: 10,
+                    marginTop: 1,
+                  },
+                ]}
+              >
+                {item.rankChange > 0 ? `▲${item.rankChange}` : `▼${Math.abs(item.rankChange)}`}
+              </Text>
+            )}
+          </View>
         )}
       </View>
 
@@ -68,7 +85,7 @@ export function LeaderboardRow({ item }: LeaderboardRowProps) {
           {item.name}
           {item.isCurrentUser && ' (You)'}
         </Text>
-        <View style={[styles.progressTrack, { backgroundColor: colors.borderLight, borderRadius: radius.sm }]}>
+        <View style={[styles.progressTrack, { backgroundColor: colors.chartInactive, borderRadius: radius.sm }]}>
           <View
             style={[
               styles.progressFill,
@@ -82,7 +99,7 @@ export function LeaderboardRow({ item }: LeaderboardRowProps) {
                       ? colors.silver
                       : item.rank === 3
                         ? colors.bronze
-                        : colors.accent,
+                        : colors.competition,
               },
             ]}
           />
@@ -92,7 +109,7 @@ export function LeaderboardRow({ item }: LeaderboardRowProps) {
       <Text
         style={[
           styles.points,
-          { ...typography.body, fontWeight: '800', color: isTop3 ? (item.rank === 1 ? colors.gold : item.rank === 2 ? colors.silver : colors.bronze) : colors.text, marginLeft: spacing.sm },
+          { ...typography.body, fontWeight: '800', color: isTop3 ? (item.rank === 1 ? colors.gold : item.rank === 2 ? colors.silver : colors.bronze) : colors.competition, marginLeft: spacing.sm },
         ]}
       >
         {item.points.toLocaleString()}
@@ -113,6 +130,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  rankWithChange: { alignItems: 'center' },
   medal: { fontSize: 24 },
   rankNum: {},
   avatar: {

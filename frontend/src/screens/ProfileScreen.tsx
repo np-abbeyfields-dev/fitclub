@@ -172,7 +172,7 @@ export default function ProfileScreen() {
       >
         {/* 1. Identity */}
         <SectionHeader title="Identity" style={{ marginBottom: spacing.xs }} />
-        <View style={[styles.identityCard, { padding: spacing.sm, marginBottom: spacing.md, backgroundColor: colors.card, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border }]}>
+        <View style={[styles.identityCard, { padding: spacing.sm, marginBottom: spacing.md, backgroundColor: colors.primaryMuted, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, ...theme.shadows.sm }]}>
           <View style={[styles.avatarWrap, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2, backgroundColor: colors.primaryMuted, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }]}>
             <Text style={[typography.h2, { color: colors.primary, fontWeight: '800' }]}>{initial}</Text>
           </View>
@@ -201,11 +201,11 @@ export default function ProfileScreen() {
               <Text style={[typography.label, { color: colors.primary }]}>Join club</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.outlineBtn, { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border }]}
+              style={[styles.primaryBtn, { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.sm, backgroundColor: colors.primary }]}
               onPress={() => (navigation as any).getParent()?.navigate('HomeTab', { screen: 'CreateClub' })}
               activeOpacity={0.7}
             >
-              <Text style={[typography.label, { color: colors.primary }]}>Create club</Text>
+              <Text style={[typography.label, { color: colors.textInverse, fontWeight: '700' }]}>Create club</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -241,17 +241,23 @@ export default function ProfileScreen() {
                           {club.name}
                         </Text>
                         {isActive && (
-                          <View style={{ backgroundColor: colors.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm }}>
-                            <Text style={[typography.caption, { color: colors.heroText, fontWeight: '700', fontSize: 10 }]}>Active</Text>
+                          <View style={{ backgroundColor: colors.success, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm }}>
+                            <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700', fontSize: 10 }]}>Active</Text>
                           </View>
                         )}
                       </View>
                       <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
                         {roundLabel}
                       </Text>
-                      <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '600' }]}>
-                        {club.role === 'admin' ? 'Admin' : 'Member'}
-                      </Text>
+                      {club.role === 'admin' ? (
+                        <View style={{ backgroundColor: colors.competition, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm, alignSelf: 'flex-start' }}>
+                          <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700', fontSize: 10 }]}>Admin</Text>
+                        </View>
+                      ) : (
+                        <Text style={[typography.caption, { color: colors.mutedText, fontWeight: '600' }]}>
+                          {club.role === 'team_lead' ? 'Team Lead' : 'Member'}
+                        </Text>
+                      )}
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                       <TouchableOpacity onPress={() => setClubPickerOpen(true)} style={{ padding: spacing.xs }}>
@@ -282,11 +288,11 @@ export default function ProfileScreen() {
                 <Text style={[typography.label, { color: colors.primary }]}>Join club</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.outlineBtn, { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border }]}
+                style={[styles.primaryBtn, { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.primary }]}
                 onPress={() => (navigation as any).getParent()?.navigate('HomeTab', { screen: 'CreateClub' })}
                 activeOpacity={0.7}
               >
-                <Text style={[typography.label, { color: colors.primary }]}>Create club</Text>
+                <Text style={[typography.label, { color: colors.textInverse, fontWeight: '700' }]}>Create club</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -393,7 +399,13 @@ export default function ProfileScreen() {
                 }}
               >
                 <Text style={[typography.body, { color: colors.text }]} numberOfLines={1}>{club.name}</Text>
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>{club.role === 'admin' ? 'Admin' : 'Member'}</Text>
+                {club.role === 'admin' ? (
+                  <View style={{ backgroundColor: theme.colors.competition, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm, alignSelf: 'flex-start' }}>
+                    <Text style={[typography.caption, { color: theme.colors.textInverse, fontWeight: '700', fontSize: 10 }]}>Admin</Text>
+                  </View>
+                ) : (
+                  <Text style={[typography.caption, { color: colors.textSecondary }]}>{club.role === 'team_lead' ? 'Team Lead' : 'Member'}</Text>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -414,7 +426,8 @@ const styles = StyleSheet.create({
   row: {},
   clubRow: {},
   clubActions: {},
-  outlineBtn: {},
+  outlineBtn: { alignItems: 'center', justifyContent: 'center' },
+  primaryBtn: { alignItems: 'center', justifyContent: 'center' },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   modalOverlay: { flex: 1, justifyContent: 'center' },
   picker: { maxHeight: 320 },

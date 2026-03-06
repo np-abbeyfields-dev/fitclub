@@ -1,54 +1,44 @@
 /**
- * Dark theme — colors + shared tokens.
+ * Dark theme — uses theme/colors.ts dark palette + aliases.
  */
 
-import { spacing, radius, typography as typoScale, shadows as shadowTokens, animation } from './tokens';
+import { spacing, radius, shadows as shadowTokens, animation } from './tokens';
 import type { Theme } from './light';
+import { darkPalette } from './colors';
+import { typography as typeScale } from './typography';
 
-/** Dark theme colors (design tokens + aliases for existing usage) */
+const c = darkPalette;
+const t = typeScale;
+
+/** Dark theme colors: palette + aliases. */
 const darkColors = {
-  // Design token palette
-  background: '#0B1220',
-  surface: '#0F172A',
-  card: '#1F2937',
+  ...c,
 
-  // Hero / performance section (deeper navy, high contrast)
-  heroBackground: '#1E3A8A',
-  heroGradientStart: '#0B1220',
-  heroGradientEnd: '#1E3A8A',
-  heroText: '#FFFFFF',
-  heroTextMuted: 'rgba(255,255,255,0.88)',
-
-  // Stat cards — slightly darker than card for depth
-  statCardBackground: '#111827',
-
-  textPrimary: '#FFFFFF',
-  textSecondary: '#9CA3AF',
-  textMuted: '#6B7280',
-
-  primary: '#60A5FA',
-  primaryHover: '#3B82F6',
-
-  success: '#22C55E',
-  warning: '#F59E0B',
-  error: '#EF4444',
-
-  border: '#374151',
-  inputBackground: '#1F2937',
-
-  // Aliases for existing components (map to token names above)
-  text: '#FFFFFF',
-  primaryMuted: '#1E3A8A',
+  text: c.textPrimary,
+  textMuted: c.textSecondary,
+  mutedText: c.textSecondary,
+  primaryMuted: c.primarySoft,
+  primaryHover: '#60A5FA',
   textInverse: '#0B1220',
 
+  accent: c.energy,
+  accentMuted: c.energySoft,
+  error: c.danger,
   errorMuted: 'rgba(127,29,29,0.5)',
-  successMuted: '#14532D',
+  successMuted: c.successSoft,
+  warning: c.competition,
   warningMuted: '#78350F',
 
-  accent: '#22C55E',
-  accentMuted: '#14532D',
+  surface: '#0F172A',
+  statCardBackground: c.card,
+  inputBackground: c.card,
+  borderLight: c.card,
 
-  borderLight: '#1F2937',
+  heroBackground: '#1E3A8A',
+  heroGradientStart: '#1E3A8A',
+  heroGradientEnd: '#1D4ED8',
+  heroText: '#FFFFFF',
+  heroTextMuted: 'rgba(255,255,255,0.88)',
 
   transparent: 'transparent' as const,
   shadowColor: '#000000',
@@ -58,11 +48,8 @@ const darkColors = {
   socialGoogle: '#4285F4',
   socialApple: '#FFFFFF',
 
-  gold: '#EAB308',
   goldMuted: '#FEF9C3',
-  silver: '#94A3B8',
   silverMuted: '#374151',
-  bronze: '#B45309',
   bronzeMuted: '#78350F',
 
   authGradient: ['#0B1220', '#111827', '#1F2937'] as readonly [string, string, string],
@@ -71,68 +58,28 @@ const darkColors = {
   authOverlayTextMuted: 'rgba(248,250,252,0.9)',
 };
 
-/** Typography style objects built from token scale */
+/** Typography: same scale as light (theme/typography) + theme caption color */
 const typography = {
-  display: {
-    fontSize: typoScale.displayLarge,
-    fontWeight: '800' as const,
-    lineHeight: typoScale.displayLarge + 8,
-  },
-  h1: {
-    fontSize: typoScale.displayMedium,
-    fontWeight: '800' as const,
-    lineHeight: typoScale.displayMedium + 6,
-  },
-  h2: {
-    fontSize: typoScale.headingLarge,
-    fontWeight: '700' as const,
-    lineHeight: typoScale.headingLarge + 4,
-  },
-  h3: {
-    fontSize: typoScale.headingMedium,
-    fontWeight: '700' as const,
-    lineHeight: typoScale.headingMedium + 4,
-  },
-  body: {
-    fontSize: typoScale.bodyLarge,
-    fontWeight: '400' as const,
-    lineHeight: typoScale.bodyLarge + 8,
-  },
-  bodySmall: {
-    fontSize: typoScale.bodyMedium,
-    fontWeight: '400' as const,
-    lineHeight: typoScale.bodyMedium + 6,
-  },
-  caption: {
-    fontSize: typoScale.bodySmall,
-    fontWeight: '500' as const,
-    lineHeight: typoScale.bodySmall + 4,
-  },
-  label: {
-    fontSize: typoScale.bodyMedium,
-    fontWeight: '600' as const,
-    lineHeight: typoScale.bodyMedium + 6,
-  },
+  hero: { ...t.hero, lineHeight: t.hero.fontSize + 8 },
+  title: { ...t.title, lineHeight: t.title.fontSize + 6 },
+  section: { ...t.section, lineHeight: t.section.fontSize + 6 },
+  body: { ...t.body, fontWeight: '400' as const, lineHeight: t.body.fontSize + 8 },
+  caption: { ...t.caption, fontWeight: '500' as const, lineHeight: t.caption.fontSize + 4, color: c.textSecondary },
+  metric: { ...t.metric, lineHeight: t.metric.fontSize + 6 },
+  display: { ...t.hero, fontWeight: '800' as const, lineHeight: t.hero.fontSize + 8 },
+  h1: { ...t.hero, fontWeight: '800' as const, lineHeight: t.hero.fontSize + 8 },
+  h2: { ...t.title, lineHeight: t.title.fontSize + 6 },
+  h3: { ...t.section, lineHeight: t.section.fontSize + 4 },
+  bodySmall: { fontSize: 14, fontWeight: '400' as const, lineHeight: 20 },
+  label: { fontSize: t.section.fontSize, fontWeight: '600' as const, lineHeight: t.section.fontSize + 6 },
 } as const;
 
 /** Shadow presets (shadowColor from theme colors) */
 const shadows = {
   card: { ...shadowTokens.card, shadowColor: darkColors.shadowColor },
-  sm: {
-    ...shadowTokens.card,
-    shadowColor: darkColors.shadowColor,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
-  md: { ...shadowTokens.card, shadowColor: darkColors.shadowColor },
-  lg: {
-    ...shadowTokens.card,
-    shadowColor: darkColors.shadowColor,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
-  },
+  sm: { ...shadowTokens.sm, shadowColor: darkColors.shadowColor },
+  md: { ...shadowTokens.md, shadowColor: darkColors.shadowColor },
+  lg: { ...shadowTokens.lg, shadowColor: darkColors.shadowColor },
 };
 
 export const darkTheme: Theme = {

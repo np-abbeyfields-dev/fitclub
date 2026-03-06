@@ -2,7 +2,6 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from './types';
 import { MainTabs } from './MainTabs';
-import WorkoutNewScreen from '../screens/WorkoutNewScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import PastRoundsScreen from '../screens/PastRoundsScreen';
 import RoundLeaderboardScreen from '../screens/RoundLeaderboardScreen';
@@ -25,7 +24,6 @@ export function RootStack() {
       }}
     >
       <Stack.Screen name="MainTabs" component={MainTabs} />
-      <Stack.Screen name="WorkoutNew" component={WorkoutNewScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="PastRounds" component={PastRoundsScreen} />
       <Stack.Screen name="RoundLeaderboard" component={RoundLeaderboardScreen} />

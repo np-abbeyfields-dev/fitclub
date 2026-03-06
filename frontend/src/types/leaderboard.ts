@@ -8,6 +8,8 @@ export type LeaderboardEntry = {
   maxPoints: number;
   /** Current user's entry (for highlighting / "You are #N") */
   isCurrentUser?: boolean;
+  /** Rank change from previous snapshot: positive = moved up, negative = moved down */
+  rankChange?: number;
 };
 
 export type LeaderboardTab = 'individuals' | 'teams';

@@ -36,6 +36,9 @@ const MAP: Partial<Record<string, { inputType: InputType; unit: string; icon: Ic
   'Unidentified Workout Type': { inputType: 'duration', unit: 'min', icon: 'help-circle' },
 };
 
+/** Fallback activity types when API returns empty (e.g. DB not seeded). */
+export const DEFAULT_ACTIVITY_TYPES: string[] = Object.keys(MAP) as string[];
+
 export function getInputConfig(genericWorkoutType: string): {
   inputType: InputType;
   unit: string;

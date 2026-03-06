@@ -61,8 +61,8 @@ export class ClubController {
       return;
     }
     const role = req.body?.role;
-    if (role !== 'admin' && role !== 'member') {
-      res.status(400).json({ success: false, error: 'role must be "admin" or "member".' } as ApiResponse);
+    if (role !== 'admin' && role !== 'team_lead' && role !== 'member') {
+      res.status(400).json({ success: false, error: 'role must be "admin", "team_lead", or "member".' } as ApiResponse);
       return;
     }
     const membership = await ClubService.setMemberRole(clubId, adminUserId, userId, role);

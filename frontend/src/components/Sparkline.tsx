@@ -36,7 +36,7 @@ export function Sparkline({ data, width = 200, height = 44 }: SparklineProps) {
       <Svg width={width} height={height}>
         <Path
           d={d}
-          stroke={colors.accent}
+          stroke={colors.energy}
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"

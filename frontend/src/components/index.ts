@@ -1,4 +1,5 @@
 export { Card } from './Card';
+export { MetricCard } from './MetricCard';
 export { PageContainer } from './PageContainer';
 export { Screen } from './Screen';
 export { MobileHeader } from './MobileHeader';
@@ -10,3 +11,4 @@ export { LeaderboardRow } from './LeaderboardRow';
 export { CircularProgressRing } from './CircularProgressRing';
 export { Sparkline } from './Sparkline';
 export { ChallengeLaunchModal } from './ChallengeLaunchModal';
+export { MilestoneModal, type MilestoneKind } from './MilestoneModal';

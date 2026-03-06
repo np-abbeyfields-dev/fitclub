@@ -12,6 +12,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -22,6 +23,7 @@ import { roundService, type Round } from '../services/roundService';
 const DEFAULT_SCORING_CONFIG = { dailyCap: 100, pointsPerMinute: 1 };
 
 export default function RoundsScreen() {
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { colors, spacing, radius, typography } = theme;
@@ -183,23 +185,30 @@ export default function RoundsScreen() {
 
   return (
     <>
-      <ScrollView
-        style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={[styles.content, { padding: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xxxl }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.header, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg, flexWrap: 'wrap', gap: spacing.sm }]}>
-          <Text style={[typography.h1, { color: colors.text }]}>Challenges</Text>
+      <View style={[styles.headerOuter, { paddingTop: insets.top + spacing.sm, paddingBottom: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
+        <View style={styles.headerRow}>
+          {navigation.canGoBack?.() && (
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: spacing.xs, marginRight: spacing.sm }} hitSlop={12}>
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+          )}
+          <Text style={[typography.h3, { color: colors.text, fontWeight: '800', flex: 1 }]} numberOfLines={1}>Challenges</Text>
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: colors.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }]}
+            style={[styles.primaryBtn, { backgroundColor: colors.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, flexShrink: 0 }]}
             onPress={openCreate}
           >
             <Ionicons name="add" size={20} color={colors.textInverse} />
-            <Text style={[typography.label, { color: colors.textInverse }]}>Create challenge</Text>
+            <Text style={[typography.label, { color: colors.textInverse }]} numberOfLines={1}>Create</Text>
           </TouchableOpacity>
         </View>
+      </View>
 
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={[styles.content, { padding: spacing.md, paddingBottom: spacing.xxxl }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        showsVerticalScrollIndicator={false}
+      >
         {error && (
           <View style={[styles.errorBanner, { backgroundColor: colors.errorMuted, padding: spacing.sm, borderRadius: radius.md, marginBottom: spacing.sm }]}>
             <Text style={[typography.bodySmall, { color: colors.error }]}>{error}</Text>
@@ -303,7 +312,8 @@ export default function RoundsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: {},
-  header: {},
+  headerOuter: {},
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
   errorBanner: {},
   roundCard: {},
   roundRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
@@ -311,7 +321,7 @@ const styles = StyleSheet.create({
   statusBadge: {},
   roundActions: {},
   iconBtn: {},
-  primaryBtn: {},
+  primaryBtn: { alignItems: 'center', justifyContent: 'center' },
   secondaryBtn: {},
   empty: { alignItems: 'center', justifyContent: 'center' },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },

@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest, ApiResponse } from '../types';
-import { UserService } from '../services/user.service';
+import { upsertPushToken } from '../services/user.service';
 
 export class UserController {
   /** Register push notification token for the current user. */
@@ -14,7 +14,7 @@ export class UserController {
       return;
     }
 
-    await UserService.upsertPushToken(userId, token, platform);
+    await upsertPushToken(userId, token, platform);
     res.status(200).json({ success: true, message: 'Push token registered.' } as ApiResponse);
   }
 }

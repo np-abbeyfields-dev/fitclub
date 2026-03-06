@@ -11,5 +11,6 @@ router.get('/rounds/:roundId/teams', TeamController.listByRound);
 router.get('/rounds/:roundId/my-team', TeamController.getMyTeam);
 router.get('/rounds/:roundId/teams/:teamId/summary', TeamController.getTeamSummary);
 router.post('/rounds/:roundId/teams/:teamId/members', TeamController.addMember);
+router.delete('/rounds/:roundId/teams/:teamId/members/:userId', TeamController.removeMember);
 
 export default router;

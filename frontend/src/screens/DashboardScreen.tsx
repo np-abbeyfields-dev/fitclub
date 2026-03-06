@@ -171,7 +171,7 @@ export default function DashboardScreen() {
       {isAdmin && (
         <View style={[styles.actions, { gap: spacing.sm }]}>
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: colors.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }]}
+            style={[styles.primaryBtn, { backgroundColor: colors.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }]}
             onPress={handleInvite}
             activeOpacity={0.8}
             disabled={!codeToShare}
@@ -181,7 +181,7 @@ export default function DashboardScreen() {
           </TouchableOpacity>
           {!activeRound && (
             <TouchableOpacity
-              style={[styles.secondaryBtn, { borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }]}
+              style={[styles.secondaryBtn, { borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }]}
               onPress={() => (navigation as any).navigate('Rounds')}
               activeOpacity={0.8}
             >
@@ -210,6 +210,6 @@ const styles = StyleSheet.create({
   cardsRow: { flexDirection: 'row', flexWrap: 'wrap' },
   statCard: {},
   actions: { flexDirection: 'row', flexWrap: 'wrap' },
-  primaryBtn: {},
-  secondaryBtn: {},
+  primaryBtn: { alignItems: 'center', justifyContent: 'center' },
+  secondaryBtn: { alignItems: 'center', justifyContent: 'center' },
 });

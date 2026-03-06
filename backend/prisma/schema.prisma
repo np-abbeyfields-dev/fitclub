@@ -52,6 +52,7 @@ model Club {
 
 enum ClubRole {
   admin
+  team_lead
   member
   @@map("club_role")
 }

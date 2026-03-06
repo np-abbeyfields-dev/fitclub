@@ -1,7 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, Platform } from 'react-native';
 import { useAppTheme } from '../theme';
-import { spacing, radius, typography } from '../theme/tokens';
+import { typography } from '../theme/tokens';
 
 type ButtonVariant = 'primary' | 'outline';
 
@@ -18,8 +18,7 @@ type ButtonProps = {
   titleColor?: string;
 };
 
-const BUTTON_RADIUS = 14;
-
+/** Component tokens: primary = background primary, text white, radius lg, padding md; secondary = border primary, text primary, background transparent */
 export function Button({
   title,
   onPress,
@@ -32,9 +31,10 @@ export function Button({
   titleColor: titleColorProp,
 }: ButtonProps) {
   const theme = useAppTheme();
+  const { colors, radius, spacing } = theme;
   const isOutline = variant === 'outline';
   const isDisabled = disabled || loading;
-  const defaultTextColor = isOutline ? theme.colors.primary : theme.colors.textInverse;
+  const defaultTextColor = isOutline ? colors.primary : '#FFFFFF';
   const textColor = titleColorProp ?? defaultTextColor;
 
   return (
@@ -42,15 +42,18 @@ export function Button({
       onPress={onPress}
       disabled={isDisabled}
       activeOpacity={0.85}
-      style={[
+        style={[
         styles.button,
         {
-          backgroundColor: isOutline ? theme.colors.transparent : theme.colors.primary,
+          backgroundColor: isOutline ? 'transparent' : colors.primary,
           borderWidth: isOutline ? 1 : 0,
-          borderColor: isOutline ? theme.colors.border : undefined,
-          borderRadius: BUTTON_RADIUS,
+          borderColor: isOutline ? colors.primary : undefined,
+          borderRadius: radius.lg,
+          paddingVertical: spacing.md,
+          paddingHorizontal: spacing.md,
           width: fullWidth ? '100%' : undefined,
           opacity: isDisabled ? 0.6 : 1,
+          gap: spacing.sm,
           ...(Platform.OS === 'ios' ? theme.shadows.sm : { elevation: 2 }),
         },
         style,
@@ -71,12 +74,9 @@ export function Button({
 const styles = StyleSheet.create({
   button: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
-    gap: spacing.sm,
   },
   text: {
     fontSize: typography.bodyLarge,

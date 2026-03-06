@@ -10,7 +10,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "io.fitclub.app"
+      "bundleIdentifier": "io.fitclub.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "io.fitclub.app",
@@ -20,12 +23,21 @@
     },
     "web": {},
     "extra": {
-      "EXPO_PUBLIC_API_URL": "https://fitclub-api-yzvzjjntma-uw.a.run.app/api"
+      "EXPO_PUBLIC_API_URL": "https://fitclub-api-yzvzjjntma-uw.a.run.app/api",
+      "eas": {
+        "projectId": "ce657ded-fdec-4d4e-ad06-0f02c0d22896"
+      }
     },
     "scheme": "fitclub",
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-notifications"
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/ce657ded-fdec-4d4e-ad06-0f02c0d22896"
+    }
   }
 }

@@ -10,18 +10,33 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
-import { Card, ChallengeLaunchModal } from '../components';
+import { Card, ChallengeLaunchModal, CircularProgressRing, MilestoneModal, type MilestoneKind } from '../components';
 import { useClub } from '../context/ClubContext';
 import { useAuthStore } from '../store/authStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { clubService } from '../services/clubService';
 import type { DashboardData } from '../types/dashboard';
-import { spacing, radius } from '../theme/tokens';
 
 const CHALLENGE_LAUNCH_SEEN_KEY = (roundId: string) => `challengeLaunchSeen_${roundId}`;
+const MILESTONES_SEEN_KEY = 'fitclub_milestones_seen';
+
+type MilestonesSeen = Partial<Record<MilestoneKind, boolean>>;
+
+async function getMilestonesSeen(): Promise<MilestonesSeen> {
+  try {
+    const raw = await AsyncStorage.getItem(MILESTONES_SEEN_KEY);
+    if (raw) return JSON.parse(raw) as MilestonesSeen;
+  } catch {}
+  return {};
+}
+
+async function setMilestoneSeen(kind: MilestoneKind): Promise<void> {
+  const seen = await getMilestonesSeen();
+  seen[kind] = true;
+  await AsyncStorage.setItem(MILESTONES_SEEN_KEY, JSON.stringify(seen));
+}
 
 const RANK_EMOJI: Record<1 | 2 | 3, string> = {
   1: '🥇',
@@ -110,6 +125,7 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [milestoneToShow, setMilestoneToShow] = useState<MilestoneKind | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const loadDashboard = async () => {
@@ -232,6 +248,43 @@ export default function HomeScreen() {
   }, [data?.round?.id]);
 
   useEffect(() => {
+    if (!data?.round?.id || data.round.name === 'No active round') return;
+    let cancelled = false;
+    (async () => {
+      const seen = await getMilestonesSeen();
+      if (cancelled) return;
+      if (data.workoutCount >= 5 && !seen.workouts5) {
+        setMilestoneToShow('workouts5');
+        return;
+      }
+      if (data.myRoundPoints >= 100 && !seen.points100) {
+        setMilestoneToShow('points100');
+        return;
+      }
+      if (data.currentStreak >= 7 && !seen.streak7) {
+        setMilestoneToShow('streak7');
+        return;
+      }
+      if (data.currentStreak >= 5 && !seen.streak5) {
+        setMilestoneToShow('streak5');
+        return;
+      }
+      if (data.currentStreak >= 3 && !seen.streak3) {
+        setMilestoneToShow('streak3');
+        return;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [data?.round?.id, data?.workoutCount, data?.myRoundPoints, data?.currentStreak]);
+
+  const dismissMilestoneModal = useCallback(async () => {
+    if (milestoneToShow) {
+      await setMilestoneSeen(milestoneToShow);
+      setMilestoneToShow(null);
+    }
+  }, [milestoneToShow]);
+
+  useEffect(() => {
     if (data) {
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -250,8 +303,8 @@ export default function HomeScreen() {
   if (clubs.length === 0) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: colors.background, padding: s.md }]}>
-        <Text style={[typography.h3, { color: colors.text, marginBottom: s.xs }]}>No clubs yet</Text>
-        <Text style={[typography.bodySmall, { color: colors.textMuted, marginBottom: s.md }]}>
+        <Text style={[typography.h3, { color: colors.textPrimary, marginBottom: s.xs }]}>No clubs yet</Text>
+        <Text style={[typography.bodySmall, { color: colors.textSecondary, marginBottom: s.md }]}>
           Create or join a club in Profile to see your dashboard.
         </Text>
         <TouchableOpacity
@@ -268,7 +321,7 @@ export default function HomeScreen() {
   if (loading && !data) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
-        <Text style={[typography.body, { color: colors.textMuted }]}>Loading…</Text>
+        <Text style={[typography.body, { color: colors.textSecondary }]}>Loading…</Text>
       </View>
     );
   }
@@ -308,18 +361,18 @@ export default function HomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.surface }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { padding: s.sm, paddingBottom: spacing.xxl + s.md, gap: 0 }]}
+        contentContainerStyle={[styles.scrollContent, { padding: s.sm, paddingBottom: s.xxl + s.md, gap: 0 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
-        {/* A. Hero — challenge name, time remaining, team membership */}
-        <LinearGradient
-          colors={[colors.heroGradientStart, colors.heroGradientEnd] as [string, string]}
+        {/* A. Hero — background primary, text white, metric large */}
+        <View
           style={[
             styles.welcomeBanner,
             {
+              backgroundColor: colors.primary,
               borderRadius: r.sm,
               paddingHorizontal: s.md,
               paddingVertical: s.md,
@@ -330,17 +383,17 @@ export default function HomeScreen() {
         >
           {data.round.id && data.round.name !== 'No active round' ? (
             <>
-              <Text style={[typography.caption, { color: colors.heroTextMuted, marginBottom: 2, fontWeight: '600' }]} numberOfLines={1}>
+              <Text style={[typography.caption, { color: colors.heroTextMuted, marginBottom: s.xxs, fontWeight: '600' }]} numberOfLines={1}>
                 {welcome.greeting}
               </Text>
-              <Text style={[typography.h3, { color: colors.heroText, marginBottom: 2, fontWeight: '800' }]} numberOfLines={2}>
+              <Text style={[typography.h3, { color: colors.textInverse, marginBottom: s.xxs, fontWeight: '800' }]} numberOfLines={2}>
                 {data.round.name}
               </Text>
-              <Text style={[typography.bodySmall, { color: colors.heroTextMuted, marginBottom: 2, fontWeight: '700' }]}>
+              <Text style={[typography.bodySmall, { color: colors.heroTextMuted, marginBottom: s.xxs, fontWeight: '700' }]}>
                 {data.round.daysLeft} day{data.round.daysLeft === 1 ? '' : 's'} left
               </Text>
               {data.teamRank?.teamName && (
-                <Text style={[typography.caption, { color: colors.heroTextMuted, marginBottom: 2, fontWeight: '600' }]} numberOfLines={1}>
+                <Text style={[typography.caption, { color: colors.heroTextMuted, marginBottom: s.xxs, fontWeight: '600' }]} numberOfLines={1}>
                   Team: {data.teamRank.teamName}
                 </Text>
               )}
@@ -350,10 +403,10 @@ export default function HomeScreen() {
             </>
           ) : (
             <>
-              <Text style={[typography.h3, { color: colors.heroText, marginBottom: 2, fontWeight: '800' }]} numberOfLines={1}>
+              <Text style={[typography.h3, { color: colors.textInverse, marginBottom: s.xxs, fontWeight: '800' }]} numberOfLines={1}>
                 {welcome.greeting}
               </Text>
-              <Text style={[typography.caption, { color: colors.heroTextMuted, marginBottom: 2, fontWeight: '600' }]} numberOfLines={1}>
+              <Text style={[typography.caption, { color: colors.heroTextMuted, marginBottom: s.xxs, fontWeight: '600' }]} numberOfLines={1}>
                 {welcome.contextHeadline}
               </Text>
               <Text style={[typography.bodySmall, { color: colors.heroTextMuted, fontWeight: '500' }]} numberOfLines={2}>
@@ -362,8 +415,8 @@ export default function HomeScreen() {
             </>
           )}
           <View style={[styles.welcomeStatRow, { flexDirection: 'row', alignItems: 'baseline', marginTop: s.sm, gap: s.xs }]}>
-            <Text style={[{ fontSize: 48, fontWeight: '800', lineHeight: 52, color: colors.heroText, letterSpacing: -0.5 }]}>{weeklyPoints}</Text>
-            <Text style={[typography.label, { color: colors.heroTextMuted, fontWeight: '700' }]}>pts this week</Text>
+            <Text style={[typography.metric, { color: colors.textInverse, letterSpacing: -0.5 }]}>{weeklyPoints}</Text>
+            <Text style={[typography.caption, { color: colors.heroTextMuted, fontWeight: '700' }]}>pts this week</Text>
           </View>
           {welcome.ctaLabel && (
             <TouchableOpacity
@@ -375,19 +428,19 @@ export default function HomeScreen() {
                   paddingHorizontal: s.sm,
                   borderRadius: r.sm,
                   borderWidth: 1.5,
-                  borderColor: 'rgba(255,255,255,0.5)',
-                  backgroundColor: 'transparent',
+                  borderColor: colors.heroTextMuted,
+                  backgroundColor: colors.transparent,
                 },
               ]}
               onPress={handleBannerCta}
               activeOpacity={0.85}
             >
-              <Text style={[typography.caption, { color: colors.heroText, fontWeight: '600' }]}>
+              <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '600' }]}>
                 {welcome.ctaLabel}
               </Text>
             </TouchableOpacity>
           )}
-        </LinearGradient>
+        </View>
 
         {/* Competitive indicator — directly below hero */}
         {data.teamRank && (
@@ -399,13 +452,13 @@ export default function HomeScreen() {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 backgroundColor: colors.card,
-                borderRadius: r.sm,
+                borderRadius: r.md,
                 paddingVertical: s.sm,
                 paddingHorizontal: s.md,
                 marginBottom: s.sm,
                 borderWidth: 1,
                 borderColor: colors.border,
-                ...shadows.sm,
+                ...shadows.card,
               },
             ]}
           >
@@ -418,9 +471,47 @@ export default function HomeScreen() {
             {gapToNext > 0 && (
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>To next rank</Text>
-                <Text style={[typography.label, { color: colors.text, fontWeight: '700' }]}>{gapToNext} pts</Text>
+                <Text style={[typography.label, { color: colors.textPrimary, fontWeight: '700' }]}>{gapToNext} pts</Text>
               </View>
             )}
+          </View>
+        )}
+
+        {/* Daily progress — ring + label toward daily cap */}
+        {data.round.id && data.dailyCap > 0 && (
+          <View
+            style={[
+              styles.dailyProgressCard,
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.card,
+                borderRadius: r.md,
+                padding: s.sm,
+                marginBottom: s.sm,
+                borderWidth: 1,
+                borderColor: colors.border,
+                ...shadows.card,
+              },
+            ]}
+          >
+            <CircularProgressRing
+              progress={Math.min(1, data.todayPoints / data.dailyCap)}
+              size={56}
+              strokeWidth={6}
+              animated
+              gradient
+              glow={false}
+            />
+            <View style={{ marginLeft: s.sm, flex: 1 }}>
+              <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>Daily points</Text>
+              <Text style={[typography.h3, { color: colors.energy, fontWeight: '800' }]}>
+                {data.todayPoints} / {data.dailyCap}
+              </Text>
+              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xxs, fontWeight: '500' }]}>
+                {data.todayPoints >= data.dailyCap ? 'Daily cap reached' : `${data.dailyCap - data.todayPoints} pts left today`}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -431,66 +522,66 @@ export default function HomeScreen() {
               style={[
                 styles.statCard,
                 {
-                  backgroundColor: colors.statCardBackground,
-                  borderRadius: r.sm,
+                  backgroundColor: colors.card,
+                  borderRadius: r.md,
                   paddingVertical: s.sm,
                   paddingHorizontal: s.xs,
                   flex: 1,
-                  ...shadows.md,
+                  ...shadows.card,
                   overflow: 'hidden',
                 },
               ]}
             >
               <View style={styles.statCardWatermark}>
-                <Ionicons name="fitness" size={44} color={colors.primary} style={{ opacity: 0.06 }} />
+                <Ionicons name="fitness" size={44} color={colors.energy} style={{ opacity: 0.06 }} />
               </View>
-              <Text style={[{ fontSize: 40, fontWeight: '800', lineHeight: 44, color: colors.text }]}>{data.workoutCount}</Text>
-              <Text style={[typography.caption, { color: colors.text, marginTop: 0, fontWeight: '700' }]}>Workouts</Text>
+              <Text style={[typography.metric, { color: colors.energy }]}>{data.workoutCount}</Text>
+              <Text style={[typography.caption, { color: colors.textPrimary, marginTop: 0, fontWeight: '700' }]}>Workouts</Text>
             </View>
             <View
               style={[
                 styles.statCard,
                 {
-                  backgroundColor: colors.statCardBackground,
-                  borderRadius: r.sm,
+                  backgroundColor: colors.card,
+                  borderRadius: r.md,
                   paddingVertical: s.sm,
                   paddingHorizontal: s.xs,
                   flex: 1,
-                  ...shadows.md,
+                  ...shadows.card,
                   overflow: 'hidden',
                 },
               ]}
             >
               <View style={styles.statCardWatermark}>
-                <Ionicons name="flash" size={44} color={colors.primary} style={{ opacity: 0.06 }} />
+                <Ionicons name="flash" size={44} color={colors.energy} style={{ opacity: 0.06 }} />
               </View>
-              <Text style={[{ fontSize: 40, fontWeight: '800', lineHeight: 44, color: colors.text }]}>{data.estimatedCalories}</Text>
-              <Text style={[typography.caption, { color: colors.text, marginTop: 0, fontWeight: '700' }]}>Calories</Text>
+              <Text style={[typography.metric, { color: colors.energy }]}>{data.estimatedCalories}</Text>
+              <Text style={[typography.caption, { color: colors.textPrimary, marginTop: 0, fontWeight: '700' }]}>Calories</Text>
             </View>
             <View
               style={[
                 styles.statCard,
                 {
-                  backgroundColor: colors.statCardBackground,
-                  borderRadius: r.sm,
+                  backgroundColor: colors.card,
+                  borderRadius: r.md,
                   paddingVertical: s.sm,
                   paddingHorizontal: s.xs,
                   flex: 1,
-                  ...shadows.md,
+                  ...shadows.card,
                   overflow: 'hidden',
                 },
               ]}
             >
               <View style={styles.statCardWatermark}>
-                <Ionicons name="flame" size={44} color={colors.accent} style={{ opacity: 0.08 }} />
+                <Ionicons name="flame" size={44} color={colors.success} style={{ opacity: 0.08 }} />
               </View>
-              <Text style={[{ fontSize: 40, fontWeight: '800', lineHeight: 44, color: colors.accent }]}>{data.currentStreak}</Text>
-              <Text style={[typography.caption, { color: colors.text, marginTop: 0, fontWeight: '700' }]}>Day streak</Text>
+              <Text style={[typography.metric, { color: colors.success }]}>{data.currentStreak}</Text>
+              <Text style={[typography.caption, { color: colors.textPrimary, marginTop: 0, fontWeight: '700' }]}>Day streak</Text>
             </View>
           </View>
 
           {/* C. Weekly Activity — styled chart container, accent active bars */}
-          <Text style={[styles.sectionTitle, typography.caption, { color: colors.text, marginBottom: 4, fontWeight: '700' }]}>
+          <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xxs, fontWeight: '700' }]}>
             Weekly activity
           </Text>
           <View
@@ -500,11 +591,11 @@ export default function HomeScreen() {
                 backgroundColor: colors.card,
                 borderWidth: 1,
                 borderColor: colors.border,
-                borderRadius: r.sm,
+                borderRadius: r.md,
                 paddingVertical: s.sm,
                 paddingHorizontal: s.sm,
                 marginBottom: s.xs,
-                ...shadows.sm,
+                ...shadows.card,
               },
             ]}
           >
@@ -515,14 +606,16 @@ export default function HomeScreen() {
                   height: BAR_CHART_HEIGHT + s.xs,
                   alignItems: 'flex-end',
                   flexDirection: 'row',
-                  gap: spacing.xxs,
+                  gap: s.xxs,
                 },
               ]}
             >
-              {data.weeklyActivity.map((day) => {
+              {data.weeklyActivity.map((day, index) => {
                 const barHeight =
                   maxWeekly > 0 ? Math.max(4, (day.points / maxWeekly) * BAR_CHART_HEIGHT) : 4;
                 const hasPoints = day.points > 0;
+                const isInStreak =
+                  hasPoints && data.currentStreak > 0 && 6 - index < data.currentStreak;
                 return (
                   <View
                     key={day.date}
@@ -533,9 +626,14 @@ export default function HomeScreen() {
                         styles.bar,
                         {
                           height: barHeight,
-                          backgroundColor: hasPoints ? colors.accent : colors.border,
+                          backgroundColor: hasPoints
+                            ? isInStreak
+                              ? colors.success
+                              : colors.energy
+                            : colors.chartInactive,
                           borderRadius: r.sm,
-                          opacity: hasPoints ? 1 : 0.65,
+                          borderWidth: isInStreak ? 2 : 0,
+                          borderColor: colors.success,
                         },
                       ]}
                     />
@@ -553,26 +651,26 @@ export default function HomeScreen() {
           </View>
 
           {/* D. Contribution Card — emphasis on points, competitive framing */}
-          <Text style={[styles.sectionTitle, typography.caption, { color: colors.text, marginBottom: 4, fontWeight: '700' }]}>
+          <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xxs, fontWeight: '700' }]}>
             Your contribution
           </Text>
-          <Card style={[styles.contributionCard, { padding: s.md, marginBottom: s.xs, backgroundColor: colors.card, borderRadius: r.sm }]}>
+          <Card style={[styles.contributionCard, { padding: s.md, marginBottom: s.xs, backgroundColor: colors.card, borderRadius: r.md }]}>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: s.xs }}>
-              <Text style={[{ fontSize: 36, fontWeight: '800', lineHeight: 42, color: colors.text }]}>
+              <Text style={[typography.metric, { color: colors.energy }]}>
                 {data.myRoundPoints.toLocaleString()}
                 <Text style={[typography.label, { color: colors.textSecondary }]}> pts</Text>
               </Text>
               {data.teamRank && myTeamRankNum != null && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.xxs }}>
                   <Text style={[typography.caption, { color: colors.textSecondary }]}>Rank</Text>
                   <Text style={[typography.h3, { color: colors.primary, fontWeight: '800' }]}>#{myTeamRankNum}</Text>
                   {gapToNext > 0 && (
-                    <Text style={[typography.caption, { color: colors.textMuted }]}>· {gapToNext} to next</Text>
+                    <Text style={[typography.caption, { color: colors.textSecondary }]}>· {gapToNext} to next</Text>
                   )}
                 </View>
               )}
             </View>
-            <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2, fontWeight: '500' }]}>
+            <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xxs, fontWeight: '500' }]}>
               Your points this round
             </Text>
             <Text style={[typography.label, { color: colors.primary, marginTop: s.sm, fontWeight: '700' }]}>
@@ -583,7 +681,7 @@ export default function HomeScreen() {
                 styles.progressTrack,
                 {
                   height: PROGRESS_BAR_HEIGHT,
-                  backgroundColor: colors.border,
+                  backgroundColor: colors.chartInactive,
                   borderRadius: r.sm,
                   overflow: 'hidden',
                   marginTop: s.sm,
@@ -596,7 +694,7 @@ export default function HomeScreen() {
                   {
                     width: `${Math.min(100, contributionPct)}%`,
                     height: '100%',
-                    backgroundColor: colors.accent,
+                    backgroundColor: colors.energy,
                     borderRadius: r.sm,
                   },
                 ]}
@@ -610,34 +708,83 @@ export default function HomeScreen() {
           {/* E. Team Summary */}
           {data.teamRank && (
             <>
-              <Text style={[styles.sectionTitle, typography.caption, { color: colors.text, marginBottom: 4, fontWeight: '700' }]}>
+              <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xxs, fontWeight: '700' }]}>
                 Team summary
               </Text>
-              <Card style={[styles.teamSummaryCard, { padding: s.md, marginBottom: s.xs, backgroundColor: colors.card, borderRadius: r.sm }]}>
-                <Text style={[typography.label, { color: colors.textSecondary, marginBottom: 2 }]} numberOfLines={1}>
+              <Card style={[styles.teamSummaryCard, { padding: s.md, marginBottom: s.xs, backgroundColor: colors.card, borderRadius: r.md }]}>
+                <Text style={[typography.label, { color: colors.textSecondary, marginBottom: s.xxs }]} numberOfLines={1}>
                   {data.teamRank.teamName}
                 </Text>
                 <View style={[styles.teamSummaryRow, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
                   <View>
                     <Text style={[typography.caption, { color: colors.textSecondary }]}>Rank</Text>
-                    <Text style={[typography.h2, { color: colors.text }]}>
+                    <Text style={[typography.h2, { color: colors.competition }]}>
                       #{myTeamRankNum} {myTeamRankNum != null && myTeamRankNum <= 3 ? RANK_EMOJI[myTeamRankNum as 1 | 2 | 3] : ''}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={[typography.caption, { color: colors.textSecondary }]}>Team points</Text>
-                    <Text style={[typography.h2, { color: colors.text }]}>{data.myTeamTotal.toLocaleString()}</Text>
+                    <Text style={[typography.metric, { color: colors.energy }]}>{data.myTeamTotal.toLocaleString()}</Text>
                   </View>
                 </View>
               </Card>
             </>
           )}
 
+          {/* Quick Log — last workout with one-tap repeat */}
+          {data.recentWorkouts.length > 0 && data.round.id && (
+            <>
+              <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xxs, fontWeight: '700' }]}>
+                Quick log
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => (navigation as any).navigate('WorkoutNew', { repeatLast: true })}
+                style={[
+                  styles.quickLogCard,
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.card,
+                    borderRadius: r.md,
+                    padding: s.sm,
+                    marginBottom: s.sm,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    ...shadows.card,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.quickLogIconWrap,
+                    {
+                      backgroundColor: colors.accentMuted,
+                      borderRadius: r.full,
+                      marginRight: s.sm,
+                    },
+                  ]}
+                >
+                  <Ionicons name="repeat" size={20} color={colors.accent} />
+                </View>
+                <View style={styles.quickLogBody}>
+                  <Text style={[typography.body, { fontWeight: '700', color: colors.textPrimary }]}>
+                    {data.recentWorkouts[0].activityName}
+                  </Text>
+                  <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xxs }]}>
+                    Last: {formatRelativeTime(data.recentWorkouts[0].createdAt)} · +{data.recentWorkouts[0].points} pts
+                  </Text>
+                </View>
+                <Text style={[typography.label, { color: colors.primary, fontWeight: '700' }]}>Repeat</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
           {/* F. Recent Activity */}
-          <Text style={[styles.sectionTitle, typography.caption, { color: colors.text, marginBottom: 4, fontWeight: '700' }]}>
+          <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xxs, fontWeight: '700' }]}>
             Recent activity
           </Text>
-          <Card noPadding elevated style={{ backgroundColor: colors.card, borderRadius: r.sm }}>
+          <Card noPadding elevated style={{ backgroundColor: colors.card, borderRadius: r.md }}>
             {data.recentWorkouts.length === 0 ? (
               <View style={[styles.emptyActivityWrap, { paddingVertical: s.md, paddingHorizontal: s.sm }]}>
                 <Ionicons name="fitness-outline" size={24} color={colors.textSecondary} style={{ marginBottom: s.xs }} />
@@ -671,8 +818,8 @@ export default function HomeScreen() {
                     <Ionicons name="fitness" size={16} color={colors.accent} />
                   </View>
                   <View style={styles.activityBody}>
-                    <Text style={[typography.body, { fontWeight: '600', color: colors.text }]}>{w.activityName}</Text>
-                    <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                    <Text style={[typography.body, { fontWeight: '600', color: colors.textPrimary }]}>{w.activityName}</Text>
+                    <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xxs }]}>
                       {w.userName ?? 'You'} · {formatRelativeTime(w.createdAt)}
                     </Text>
                   </View>
@@ -690,7 +837,12 @@ export default function HomeScreen() {
         teamName={data.teamRank?.teamName ?? null}
         onDismiss={dismissLaunchModal}
         onViewLeaderboard={() => (navigation as any).navigate('LeaderboardTab')}
-        onLogWorkout={() => (navigation as any).getParent()?.navigate('WorkoutNew')}
+        onLogWorkout={() => (navigation as any).navigate('WorkoutNew')}
+      />
+      <MilestoneModal
+        visible={milestoneToShow != null}
+        milestone={milestoneToShow}
+        onDismiss={dismissMilestoneModal}
       />
     </View>
   );
@@ -723,5 +875,9 @@ const styles = StyleSheet.create({
   activityIconWrap: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   activityBody: { flex: 1, minWidth: 0 },
   emptyActivityWrap: { alignItems: 'center' },
-  primaryBtn: { alignSelf: 'flex-start' },
+  primaryBtn: { alignSelf: 'flex-start', alignItems: 'center', justifyContent: 'center' },
+  dailyProgressCard: {},
+  quickLogCard: {},
+  quickLogIconWrap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  quickLogBody: { flex: 1, minWidth: 0 },
 });

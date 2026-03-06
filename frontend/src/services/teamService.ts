@@ -47,6 +47,7 @@ export const teamService = {
         totalPoints: number;
         members: Array<{
           id: string;
+          userId: string;
           name: string;
           points: number;
           isCurrentUser: boolean;
@@ -65,6 +66,12 @@ export const teamService = {
     return request<{ success: boolean; data: unknown }>(`/rounds/${roundId}/teams/${teamId}/members`, {
       method: 'POST',
       body: JSON.stringify({ userId }),
+    });
+  },
+
+  removeMember(roundId: string, teamId: string, userId: string) {
+    return request<{ success: boolean }>(`/rounds/${roundId}/teams/${teamId}/members/${userId}`, {
+      method: 'DELETE',
     });
   },
 

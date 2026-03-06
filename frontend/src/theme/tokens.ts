@@ -1,23 +1,24 @@
 /**
- * Design tokens — spacing, radius, typography scale, shadows.
+ * Design tokens — typography scale, shadows.
+ * Spacing and radius from theme/spacing.ts and theme/radius.ts; card shadow from theme/elevation.ts.
  */
 
+import { spacing as spacingScale } from './spacing';
+import { radius as radiusScale } from './radius';
+import { elevation } from './elevation';
+
+/** Spacing: theme/spacing + legacy keys (xxs, xxl, xxxl) for backward compatibility */
 export const spacing = {
+  ...spacingScale,
   xxs: 4,
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
   xxl: 48,
   xxxl: 64,
 };
 
+/** Radius: theme/radius + legacy keys (xl, full) for backward compatibility */
 export const radius = {
-  sm: 6,
-  md: 10,
-  lg: 14,
-  xl: 18,
+  ...radiusScale,
+  xl: 20,
   full: 9999,
 };
 
@@ -31,13 +32,26 @@ export const typography = {
   bodySmall: 12,
 };
 
-/** Shadow structure; shadowColor is supplied by theme (colors.shadowColor). */
+/** Shadows: card from theme/elevation; theme (light/dark) overlays shadowColor. */
 export const shadows = {
-  card: {
-    shadowOpacity: 0.08,
+  card: { ...elevation.card },
+  sm: {
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  md: {
+    shadowOpacity: 0.05,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+  },
+  lg: {
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
   },
 };
 

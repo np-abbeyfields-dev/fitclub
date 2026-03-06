@@ -5,7 +5,7 @@ import { useTheme } from '../theme';
 type PointsTextProps = {
   value: number | string;
   style?: TextStyle;
-  /** Use accent (lime) color for points */
+  /** Use energy color for points / workout metrics */
   accent?: boolean;
 };
 
@@ -20,7 +20,7 @@ export function PointsText({ value, style, accent = true }: PointsTextProps) {
           fontSize: typography.display.fontSize,
           fontWeight: typography.display.fontWeight,
           lineHeight: typography.display.lineHeight,
-          color: accent ? colors.accent : colors.text,
+          color: accent ? colors.energy : colors.text,
         },
         style,
       ]}

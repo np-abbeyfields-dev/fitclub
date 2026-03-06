@@ -17,18 +17,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+/** Role is derived from ClubMembership only; never stored on User. */
+export type ClubRole = 'admin' | 'team_lead' | 'member';
+
 export type ClubWithRole = {
   id: string;
   name: string;
   inviteCode?: string;
-  role: 'admin' | 'member';
+  role: ClubRole;
   joinedAt?: string;
 };
 
 export type ClubMember = {
   id: string;
   userId: string;
-  role: 'admin' | 'member';
+  role: ClubRole;
   joinedAt: string;
   displayName: string;
   email: string;
@@ -61,7 +64,7 @@ export const clubService = {
     const q = sp.toString();
     return request<{ success: boolean; data: ClubMember[] }>(`/clubs/${clubId}/members${q ? `?${q}` : ''}`);
   },
-  setMemberRole(clubId: string, userId: string, role: 'admin' | 'member') {
+  setMemberRole(clubId: string, userId: string, role: ClubRole) {
     return request<{ success: boolean; data: unknown }>(`/clubs/${clubId}/members/${userId}/role`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),

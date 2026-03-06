@@ -52,6 +52,19 @@ export class TeamController {
     res.status(201).json({ success: true, data: membership, message: 'Member added to team.' } as ApiResponse);
   }
 
+  static async removeMember(req: AuthRequest, res: Response): Promise<void> {
+    const callerUserId = req.user!.id;
+    const roundId = param(req, 'roundId');
+    const teamId = param(req, 'teamId');
+    const userId = param(req, 'userId');
+    if (!roundId || !teamId || !userId) {
+      res.status(400).json({ success: false, error: 'Round ID, team ID, and user ID required.' } as ApiResponse);
+      return;
+    }
+    await TeamService.removeMemberFromTeam(roundId, teamId, userId, callerUserId);
+    res.json({ success: true, message: 'Member removed from team.' } as ApiResponse);
+  }
+
   static async getTeamSummary(req: AuthRequest, res: Response): Promise<void> {
     const userId = req.user!.id;
     const roundId = param(req, 'roundId');

@@ -40,6 +40,8 @@ export default function RoundLeaderboardScreen() {
   const [loading, setLoading] = useState(true);
   const [individuals, setIndividuals] = useState<LeaderboardEntry[]>([]);
   const [teams, setTeams] = useState<LeaderboardEntry[]>([]);
+  const prevIndRanks = React.useRef<Map<string, number>>(new Map());
+  const prevTeamRanks = React.useRef<Map<string, number>>(new Map());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,8 +52,26 @@ export default function RoundLeaderboardScreen() {
       ]);
       const maxInd = indRes.data?.length ? Math.max(...indRes.data.map((e) => e.points)) : 0;
       const maxTeam = teamRes.data?.length ? Math.max(...teamRes.data.map((e) => e.points)) : 0;
-      setIndividuals((indRes.data ?? []).map((e) => ({ ...e, maxPoints: maxInd || e.points })));
-      setTeams((teamRes.data ?? []).map((e) => ({ ...e, maxPoints: maxTeam || e.points })));
+      const indList = (indRes.data ?? []).map((e, i) => ({
+        ...e,
+        rank: i + 1,
+        maxPoints: maxInd || e.points,
+        rankChange: prevIndRanks.current.has(e.id)
+          ? prevIndRanks.current.get(e.id)! - (i + 1)
+          : undefined,
+      }));
+      const teamList = (teamRes.data ?? []).map((e, i) => ({
+        ...e,
+        rank: i + 1,
+        maxPoints: maxTeam || e.points,
+        rankChange: prevTeamRanks.current.has(e.id)
+          ? prevTeamRanks.current.get(e.id)! - (i + 1)
+          : undefined,
+      }));
+      prevIndRanks.current = new Map(indList.map((e) => [e.id, e.rank]));
+      prevTeamRanks.current = new Map(teamList.map((e) => [e.id, e.rank]));
+      setIndividuals(indList);
+      setTeams(teamList);
     } catch {
       setIndividuals([]);
       setTeams([]);
@@ -100,14 +120,14 @@ export default function RoundLeaderboardScreen() {
       {/* Header: back + round name + Ended — respect safe area */}
       <View style={[styles.header, { paddingTop: insets.top + s.sm, paddingBottom: s.sm, paddingHorizontal: s.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.card }]}>
         <TouchableOpacity onPress={goBack} style={{ padding: s.xs, marginRight: s.sm }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[typography.h3, { color: colors.text, fontWeight: '800' }]} numberOfLines={1}>
+          <Text style={[typography.h3, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
             {roundName}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.sm, marginTop: 2 }}>
-            <View style={{ backgroundColor: colors.textMuted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.sm, marginTop: s.xxs }}>
+            <View style={{ backgroundColor: colors.textSecondary, paddingHorizontal: s.xs, paddingVertical: s.xxs, borderRadius: r.sm }}>
               <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700' }]}>Ended</Text>
             </View>
             <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
@@ -134,8 +154,8 @@ export default function RoundLeaderboardScreen() {
                 justifyContent: 'center',
                 backgroundColor: myEntry.rank === 1 ? colors.accentMuted : colors.statCardBackground,
                 borderWidth: 1,
-                borderColor: myEntry.rank === 1 ? colors.accent : colors.border,
-                borderRadius: r.sm,
+                borderColor: myEntry.rank === 1 ? colors.energy : colors.border,
+                borderRadius: r.md,
                 paddingVertical: s.xs,
                 paddingHorizontal: s.sm,
                 marginTop: s.sm,
@@ -145,13 +165,13 @@ export default function RoundLeaderboardScreen() {
           >
             {myEntry.rank === 1 ? (
               <>
-                <Ionicons name="trophy" size={16} color={colors.accent} />
-                <Text style={[typography.label, { color: colors.text, fontWeight: '800', marginLeft: 6 }]}>You were #1</Text>
+                <Ionicons name="trophy" size={16} color={colors.energy} />
+                <Text style={[typography.label, { color: colors.textPrimary, fontWeight: '800', marginLeft: s.sm }]}>You were #1</Text>
               </>
             ) : (
               <>
                 <Ionicons name="trophy-outline" size={14} color={colors.primary} />
-                <Text style={[typography.caption, { color: colors.text, fontWeight: '700', marginLeft: 4 }]}>
+                <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '700', marginLeft: s.xxs }]}>
                   {gapToFirst.toLocaleString()} pts behind #1
                 </Text>
               </>
@@ -160,22 +180,22 @@ export default function RoundLeaderboardScreen() {
         )}
 
         {/* Segment */}
-        <View style={[styles.segmentWrap, { flexDirection: 'row', backgroundColor: colors.card, borderRadius: r.sm, padding: 2, marginBottom: s.sm, borderWidth: 1, borderColor: colors.border }]}>
+        <View style={[styles.segmentWrap, { flexDirection: 'row', backgroundColor: colors.card, borderRadius: r.md, padding: s.xxs, marginBottom: s.sm, borderWidth: 1, borderColor: colors.border, ...shadows.card }]}>
           <TouchableOpacity
             onPress={() => onTabChange('teams')}
             activeOpacity={0.85}
-            style={[styles.segmentBtn, { flex: 1, paddingVertical: s.sm, borderRadius: r.sm - 2, backgroundColor: tab === 'teams' ? colors.primary : 'transparent' }]}
+            style={[styles.segmentBtn, { flex: 1, paddingVertical: s.sm, borderRadius: r.sm - 2, backgroundColor: tab === 'teams' ? colors.primary : colors.transparent }]}
           >
-            <Ionicons name="people" size={18} color={tab === 'teams' ? colors.heroText : colors.textSecondary} />
-            <Text style={[typography.label, { fontWeight: '700', color: tab === 'teams' ? colors.heroText : colors.text }]}>Teams</Text>
+            <Ionicons name="people" size={18} color={tab === 'teams' ? colors.textInverse : colors.textSecondary} />
+            <Text style={[typography.label, { fontWeight: '700', color: tab === 'teams' ? colors.textInverse : colors.textPrimary }]}>Teams</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => onTabChange('individuals')}
             activeOpacity={0.85}
-            style={[styles.segmentBtn, { flex: 1, paddingVertical: s.sm, borderRadius: r.sm - 2, backgroundColor: tab === 'individuals' ? colors.primary : 'transparent' }]}
+            style={[styles.segmentBtn, { flex: 1, paddingVertical: s.sm, borderRadius: r.sm - 2, backgroundColor: tab === 'individuals' ? colors.primary : colors.transparent }]}
           >
-            <Ionicons name="person" size={18} color={tab === 'individuals' ? colors.heroText : colors.textSecondary} />
-            <Text style={[typography.label, { fontWeight: '700', color: tab === 'individuals' ? colors.heroText : colors.text }]}>Individuals</Text>
+            <Ionicons name="person" size={18} color={tab === 'individuals' ? colors.textInverse : colors.textSecondary} />
+            <Text style={[typography.label, { fontWeight: '700', color: tab === 'individuals' ? colors.textInverse : colors.textPrimary }]}>Individuals</Text>
           </TouchableOpacity>
         </View>
 
@@ -200,14 +220,14 @@ export default function RoundLeaderboardScreen() {
                         borderBottomRightRadius: r.sm,
                         justifyContent: 'flex-end',
                         paddingBottom: s.xs,
-                        marginTop: 4,
-                        ...(rank === 1 ? shadows.md : shadows.sm),
+                        marginTop: s.xxs,
+                        ...shadows.card,
                       },
                     ]}
                   >
                     <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>#{rank}</Text>
-                    <Text style={[typography.caption, { color: colors.text, fontWeight: '800' }]} numberOfLines={1}>{entry.name}</Text>
-                    <Text style={[typography.label, { color: rank === 1 ? colors.primary : colors.text, fontWeight: '800' }]}>{entry.points.toLocaleString()}</Text>
+                    <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>{entry.name}</Text>
+                    <Text style={[typography.label, { color: colors.competition, fontWeight: '800' }]}>{entry.points.toLocaleString()}</Text>
                   </View>
                 </View>
               );
@@ -233,22 +253,39 @@ export default function RoundLeaderboardScreen() {
                 paddingHorizontal: s.sm,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
-                backgroundColor: item.isCurrentUser ? colors.accentMuted : 'transparent',
+                backgroundColor: item.isCurrentUser ? colors.accentMuted : colors.transparent,
               },
             ]}
           >
-            <Text style={[typography.bodySmall, { fontWeight: '800', color: colors.text, width: 32 }]}>#{item.rank}</Text>
-            <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[typography.body, { fontWeight: '700', color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+            <View style={{ width: 32, alignItems: 'center' }}>
+              <Text style={[typography.bodySmall, { fontWeight: '800', color: colors.textPrimary }]}>#{item.rank}</Text>
+              {item.rankChange != null && item.rankChange !== 0 && (
+                <Text
+                  style={[
+                    typography.caption,
+                    {
+                      fontWeight: '800',
+                      fontSize: 10,
+                      color: item.rankChange > 0 ? colors.success : colors.danger,
+                      marginTop: 1,
+                    },
+                  ]}
+                >
+                  {item.rankChange > 0 ? `▲${item.rankChange}` : `▼${Math.abs(item.rankChange)}`}
+                </Text>
+              )}
+            </View>
+            <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: s.sm }}>
+              <Text style={[typography.body, { fontWeight: '700', color: colors.textPrimary }]} numberOfLines={1}>{item.name}</Text>
               {item.isCurrentUser && (
-                <View style={{ backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                <View style={{ backgroundColor: colors.energy, paddingHorizontal: s.xs, paddingVertical: s.xxs, borderRadius: r.sm }}>
                   <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700', fontSize: 10 }]}>
                     {tab === 'teams' ? 'Your Team' : 'You'}
                   </Text>
                 </View>
               )}
             </View>
-            <Text style={[typography.label, { fontWeight: '800', color: colors.text, textAlign: 'right', minWidth: 56 }]}>{item.points.toLocaleString()}</Text>
+            <Text style={[typography.label, { fontWeight: '800', color: colors.energy, textAlign: 'right', minWidth: 56 }]}>{item.points.toLocaleString()}</Text>
           </View>
         ))}
       </ScrollView>

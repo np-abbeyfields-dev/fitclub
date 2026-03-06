@@ -33,14 +33,25 @@ export class TeamService {
   }
 
   /**
-   * Add a user to a team. Caller must be club member.
+   * Add a user to a team. Caller must be club member; adding someone else requires admin or team_lead (and team_lead must be in this team).
    * Enforces: user can be in only one team per club per round (see schema TeamMembership).
-   * Validates: user in same club, round is active, user not already in a team for this round.
    */
   static async addMemberToTeam(roundId: string, teamId: string, userIdToAdd: string, callerUserId: string) {
     const round = await prisma.round.findUnique({ where: { id: roundId } });
     if (!round) throw new NotFoundError('Round not found.');
-    await ClubService.ensureMember(callerUserId, round.clubId);
+    const callerMembership = await ClubService.ensureMember(callerUserId, round.clubId);
+    const isAddingSelf = callerUserId === userIdToAdd;
+    if (!isAddingSelf) {
+      if (callerMembership.role !== 'admin') {
+        if (callerMembership.role !== 'team_lead')
+          throw new AuthorizationError('Only admins and team leads can add members to a team.');
+        const callerInTeam = await prisma.teamMembership.findUnique({
+          where: { userId_roundId: { userId: callerUserId, roundId } },
+        });
+        if (!callerInTeam || callerInTeam.teamId !== teamId)
+          throw new AuthorizationError('Team leads can only add members to their own team.');
+      }
+    }
 
     if (round.status !== 'active') {
       throw new ValidationError('Members can only be added to teams when the round is active.');
@@ -71,6 +82,37 @@ export class TeamService {
       include: { User: { select: { id: true, displayName: true, email: true } }, Team: true },
     });
     return membership;
+  }
+
+  /** Remove a member from a team. Caller must be club admin or team_lead (team_lead only for their own team). */
+  static async removeMemberFromTeam(roundId: string, teamId: string, userIdToRemove: string, callerUserId: string) {
+    const round = await prisma.round.findUnique({ where: { id: roundId } });
+    if (!round) throw new NotFoundError('Round not found.');
+    const callerMembership = await ClubService.ensureMember(callerUserId, round.clubId);
+    if (callerMembership.role !== 'admin') {
+      if (callerMembership.role !== 'team_lead')
+        throw new AuthorizationError('Only admins and team leads can remove members from a team.');
+      const callerInTeam = await prisma.teamMembership.findUnique({
+        where: { userId_roundId: { userId: callerUserId, roundId } },
+      });
+      if (!callerInTeam || callerInTeam.teamId !== teamId)
+        throw new AuthorizationError('Team leads can only remove members from their own team.');
+    }
+
+    const team = await prisma.team.findFirst({ where: { id: teamId, roundId } });
+    if (!team) throw new NotFoundError('Team not found.');
+
+    const membership = await prisma.teamMembership.findUnique({
+      where: { userId_roundId: { userId: userIdToRemove, roundId } },
+    });
+    if (!membership || membership.teamId !== teamId) {
+      throw new NotFoundError('Member is not on this team.');
+    }
+
+    await prisma.teamMembership.delete({
+      where: { id: membership.id },
+    });
+    return { success: true };
   }
 
   /** Get current user's team summary for the round, or null if not in a team. */
@@ -108,6 +150,7 @@ export class TeamService {
     const total = team.Memberships.reduce((sum, m) => sum + (pointsByUser.get(m.userId) ?? 0), 0);
     const members = team.Memberships.map((m) => ({
       id: m.id,
+      userId: m.userId,
       name: m.User.displayName,
       points: Math.round(pointsByUser.get(m.userId) ?? 0),
       isCurrentUser: m.userId === userId,
