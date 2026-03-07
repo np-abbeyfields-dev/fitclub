@@ -8,22 +8,21 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
-  TextInput,
-  Modal,
-  Pressable,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { Card } from '../components';
 import { useClub } from '../context/ClubContext';
 import { roundService, type Round } from '../services/roundService';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 
-const DEFAULT_SCORING_CONFIG = { dailyCap: 100, pointsPerMinute: 1 };
+type Nav = NativeStackNavigationProp<RootStackParamList, 'Rounds'>;
 
 export default function RoundsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { colors, spacing, radius, typography } = theme;
@@ -33,12 +32,6 @@ export default function RoundsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState<'create' | 'edit' | null>(null);
-  const [editingRound, setEditingRound] = useState<Round | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formStart, setFormStart] = useState('');
-  const [formEnd, setFormEnd] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!selectedClub) {
@@ -63,73 +56,29 @@ export default function RoundsScreen() {
     load();
   }, [load]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (selectedClub) load();
+    }, [selectedClub, load])
+  );
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refreshClubs(), load()]);
   }, [refreshClubs, load]);
 
   const openCreate = useCallback(() => {
-    setEditingRound(null);
-    setFormName('');
-    setFormStart('');
-    setFormEnd('');
-    setFormError(null);
-    setModalOpen('create');
-  }, []);
-
-  const openEdit = useCallback((r: Round) => {
-    if (r.status !== 'draft') return;
-    setEditingRound(r);
-    setFormName(r.name);
-    setFormStart(r.startDate.slice(0, 10));
-    setFormEnd(r.endDate.slice(0, 10));
-    setFormError(null);
-    setModalOpen('edit');
-  }, []);
-
-  const submitForm = useCallback(async () => {
-    const name = formName.trim();
-    if (!name) {
-      setFormError('Round name is required.');
-      return;
-    }
-    const start = formStart ? new Date(formStart) : null;
-    const end = formEnd ? new Date(formEnd) : null;
-    if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) {
-      setFormError('Valid start and end dates are required.');
-      return;
-    }
-    if (end <= start) {
-      setFormError('End date must be after start date.');
-      return;
-    }
     if (!selectedClub) return;
-    setFormError(null);
-    try {
-      if (modalOpen === 'create') {
-        await roundService.create(selectedClub.id, {
-          name,
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-          scoringConfig: DEFAULT_SCORING_CONFIG,
-        });
-        setModalOpen(null);
-        await load();
-      } else if (modalOpen === 'edit' && editingRound) {
-        await roundService.update(editingRound.id, {
-          name,
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-          scoringConfig: DEFAULT_SCORING_CONFIG,
-        });
-        setModalOpen(null);
-        setEditingRound(null);
-        await load();
-      }
-    } catch (e) {
-      setFormError(e instanceof Error ? e.message : 'Request failed');
-    }
-  }, [formName, formStart, formEnd, modalOpen, editingRound, selectedClub, load]);
+    navigation.navigate('RoundConfig', { mode: 'create', clubId: selectedClub.id });
+  }, [selectedClub, navigation]);
+
+  const openEdit = useCallback(
+    (r: Round) => {
+      if (r.status !== 'draft') return;
+      navigation.navigate('RoundConfig', { mode: 'edit', roundId: r.id });
+    },
+    [navigation]
+  );
 
   const activate = useCallback(async (r: Round) => {
     setActioningId(r.id);
@@ -180,8 +129,8 @@ export default function RoundsScreen() {
     );
   }
 
-  const statusColor = (s: string) => (s === 'active' ? colors.accent : s === 'ended' ? colors.textMuted : colors.primary);
-  const statusBgColor = (s: string) => (s === 'active' ? colors.accentMuted : s === 'ended' ? colors.borderLight : colors.primaryMuted);
+  const statusColor = (s: string) => (s === 'active' ? colors.accent : s === 'completed' ? colors.textMuted : colors.primary);
+  const statusBgColor = (s: string) => (s === 'active' ? colors.accentMuted : s === 'completed' ? colors.borderLight : colors.primaryMuted);
 
   return (
     <>
@@ -260,51 +209,6 @@ export default function RoundsScreen() {
           </View>
         )}
       </ScrollView>
-
-      <Modal visible={modalOpen !== null} transparent animationType="fade">
-        <Pressable style={[styles.modalOverlay, { backgroundColor: colors.overlay }]} onPress={() => setModalOpen(null)}>
-          <Pressable style={[styles.modalBox, { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[typography.h2, { color: colors.text, marginBottom: spacing.md }]}>{modalOpen === 'create' ? 'Create challenge' : 'Edit challenge'}</Text>
-            {formError && (
-              <View style={[styles.formError, { backgroundColor: colors.errorMuted, padding: spacing.sm, borderRadius: radius.sm, marginBottom: spacing.sm }]}>
-                <Text style={[typography.bodySmall, { color: colors.error }]}>{formError}</Text>
-              </View>
-            )}
-            <Text style={[typography.label, { color: colors.text, marginBottom: spacing.xs }]}>Name</Text>
-            <TextInput
-              style={[styles.input, { borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.sm, color: colors.text }]}
-              value={formName}
-              onChangeText={setFormName}
-              placeholder="e.g. Spring 2025"
-              placeholderTextColor={colors.textMuted}
-            />
-            <Text style={[typography.label, { color: colors.text, marginBottom: spacing.xs }]}>Start date</Text>
-            <TextInput
-              style={[styles.input, { borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.sm, color: colors.text }]}
-              value={formStart}
-              onChangeText={setFormStart}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
-            />
-            <Text style={[typography.label, { color: colors.text, marginBottom: spacing.xs }]}>End date</Text>
-            <TextInput
-              style={[styles.input, { borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md, color: colors.text }]}
-              value={formEnd}
-              onChangeText={setFormEnd}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
-            />
-            <View style={[styles.modalActions, { flexDirection: 'row', gap: spacing.sm }]}>
-              <TouchableOpacity style={[styles.secondaryBtn, { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }]} onPress={() => setModalOpen(null)}>
-                <Text style={[typography.label, { color: colors.textSecondary }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.primaryBtn, { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.primary }]} onPress={submitForm}>
-                <Text style={[typography.label, { color: colors.textInverse }]}>{modalOpen === 'create' ? 'Create' : 'Save'}</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </>
   );
 }
@@ -324,9 +228,4 @@ const styles = StyleSheet.create({
   primaryBtn: { alignItems: 'center', justifyContent: 'center' },
   secondaryBtn: {},
   empty: { alignItems: 'center', justifyContent: 'center' },
-  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalBox: { width: '100%', maxWidth: 400 },
-  formError: {},
-  input: { borderWidth: 1 },
-  modalActions: {},
 });

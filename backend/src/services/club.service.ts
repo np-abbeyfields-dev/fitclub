@@ -86,6 +86,10 @@ export class ClubService {
       where: { userId_clubId: { userId: targetUserId, clubId } },
     });
     if (!target) throw new NotFoundError('Member not found in this club.');
+    if (target.role === 'admin' && newRole !== 'admin') {
+      const adminCount = await prisma.clubMembership.count({ where: { clubId, role: 'admin' } });
+      if (adminCount <= 1) throw new ValidationError('Club must have at least one admin. Promote another member to admin first.');
+    }
     const updated = await prisma.clubMembership.update({
       where: { userId_clubId: { userId: targetUserId, clubId } },
       data: { role: newRole },

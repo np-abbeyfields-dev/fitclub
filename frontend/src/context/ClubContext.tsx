@@ -1,6 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/authStore';
 import { clubService, type ClubWithRole } from '../services/clubService';
+
+const SELECTED_CLUB_ID_KEY = 'fitclub_selected_club_id';
 
 type ClubContextValue = {
   clubs: ClubWithRole[];
@@ -36,11 +39,17 @@ export function ClubProvider({ children }: { children: React.ReactNode }) {
       const res = await clubService.listMine();
       const list = res.data || [];
       setClubs(list);
-      setSelectedClubState((prev) => {
-        if (list.length === 0) return null;
-        if (prev && list.some((c) => c.id === prev.id)) return prev;
-        return list[0];
-      });
+      let nextSelected: ClubWithRole | null = null;
+      if (list.length === 0) {
+        await AsyncStorage.removeItem(SELECTED_CLUB_ID_KEY).catch(() => {});
+      } else {
+        const savedId = await AsyncStorage.getItem(SELECTED_CLUB_ID_KEY).catch(() => null);
+        const found = savedId ? list.find((c) => c.id === savedId) : null;
+        if (found) nextSelected = found;
+        else nextSelected = list[0];
+        await AsyncStorage.setItem(SELECTED_CLUB_ID_KEY, nextSelected.id).catch(() => {});
+      }
+      setSelectedClubState(nextSelected);
     } catch {
       setClubs([]);
       setSelectedClubState(null);
@@ -55,6 +64,11 @@ export function ClubProvider({ children }: { children: React.ReactNode }) {
 
   const setSelectedClub = useCallback((club: ClubWithRole | null) => {
     setSelectedClubState(club);
+    if (club) {
+      AsyncStorage.setItem(SELECTED_CLUB_ID_KEY, club.id).catch(() => {});
+    } else {
+      AsyncStorage.removeItem(SELECTED_CLUB_ID_KEY).catch(() => {});
+    }
   }, []);
 
   const value: ClubContextValue = {

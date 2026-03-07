@@ -17,7 +17,7 @@ function getRoundCountdown(endDateStr: string): string {
   const end = new Date(endDateStr);
   const now = new Date();
   const days = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (days <= 0) return 'Round ended';
+  if (days <= 0) return 'Round completed';
   if (days === 1) return '1 day left';
   return `${days} days left`;
 }

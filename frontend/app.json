@@ -31,7 +31,8 @@
     "scheme": "fitclub",
     "plugins": [
       "@react-native-community/datetimepicker",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-font"
     ],
     "runtimeVersion": {
       "policy": "appVersion"

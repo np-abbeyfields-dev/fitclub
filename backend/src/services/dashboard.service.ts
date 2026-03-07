@@ -132,13 +132,30 @@ export class DashboardService {
       const key = new Date(row.createdAt).toISOString().slice(0, 10);
       pointsByDay.set(key, (pointsByDay.get(key) ?? 0) + row.finalAwardedPoints);
     }
-    const weeklyActivity: Array<{ date: string; points: number }> = [];
+    const workoutsLast7Days = await prisma.workout.findMany({
+      where: {
+        userId,
+        roundId: activeRound.id,
+        loggedAt: { gte: sevenDaysAgo },
+      },
+      select: { loggedAt: true },
+    });
+    const workoutCountByDay = new Map<string, number>();
+    for (const w of workoutsLast7Days) {
+      const key = new Date(w.loggedAt).toISOString().slice(0, 10);
+      workoutCountByDay.set(key, (workoutCountByDay.get(key) ?? 0) + 1);
+    }
+    const weeklyActivity: Array<{ date: string; points: number; workoutCount: number }> = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       d.setHours(0, 0, 0, 0);
       const dateStr = d.toISOString().slice(0, 10);
-      weeklyActivity.push({ date: dateStr, points: Math.round(pointsByDay.get(dateStr) ?? 0) });
+      weeklyActivity.push({
+        date: dateStr,
+        points: Math.round(pointsByDay.get(dateStr) ?? 0),
+        workoutCount: workoutCountByDay.get(dateStr) ?? 0,
+      });
     }
 
     const workoutDays = await prisma.workout.findMany({

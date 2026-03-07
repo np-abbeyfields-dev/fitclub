@@ -34,7 +34,7 @@ export function Button({
   const { colors, radius, spacing } = theme;
   const isOutline = variant === 'outline';
   const isDisabled = disabled || loading;
-  const defaultTextColor = isOutline ? colors.primary : '#FFFFFF';
+  const defaultTextColor = isOutline ? colors.primary : colors.textInverse;
   const textColor = titleColorProp ?? defaultTextColor;
 
   return (
@@ -45,7 +45,7 @@ export function Button({
         style={[
         styles.button,
         {
-          backgroundColor: isOutline ? 'transparent' : colors.primary,
+          backgroundColor: isOutline ? colors.transparent : colors.primary,
           borderWidth: isOutline ? 1 : 0,
           borderColor: isOutline ? colors.primary : undefined,
           borderRadius: radius.lg,

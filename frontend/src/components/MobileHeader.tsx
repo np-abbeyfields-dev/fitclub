@@ -1,21 +1,35 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
+import { useClub } from '../context/ClubContext';
+import { useAuthStore } from '../store/authStore';
+import { ClubSwitcherSheet } from './ClubSwitcherSheet';
 
-const HEADER_CONTENT_HEIGHT = 48;
+const HEADER_CONTENT_HEIGHT = 44;
+const AVATAR_SIZE = 32;
 
 export function MobileHeader() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { colors, spacing, typography } = theme;
+  const { selectedClub } = useClub();
+  const user = useAuthStore((s) => s.user);
+  const [sheetVisible, setSheetVisible] = useState(false);
+
+  const openSheet = useCallback(() => setSheetVisible(true), []);
+  const closeSheet = useCallback(() => setSheetVisible(false), []);
+
+  const displayName = selectedClub?.name ?? 'FitClub';
+  const initial = (user?.displayName ?? '?').trim().charAt(0).toUpperCase() || '?';
 
   return (
     <View
       style={[
         styles.container,
         {
-          paddingBottom: spacing.sm,
+          paddingBottom: spacing.xs,
           paddingHorizontal: spacing.md,
           backgroundColor: colors.surface,
           borderBottomWidth: 1,
@@ -24,10 +38,21 @@ export function MobileHeader() {
       ]}
     >
       <View style={[styles.row, { minHeight: HEADER_CONTENT_HEIGHT, paddingTop: insets.top }]}>
-        <Text style={[styles.title, { ...typography.h3, color: colors.text }]} numberOfLines={1}>
-          FitClub
-        </Text>
+        <TouchableOpacity
+          style={[styles.clubButton, { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xxs }]}
+          onPress={openSheet}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.title, { ...typography.h3, color: colors.text }]} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+        <View style={[styles.avatar, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2, backgroundColor: colors.primaryMuted, alignItems: 'center', justifyContent: 'center' }]}>
+          <Text style={[typography.caption, { color: colors.primary, fontWeight: '800' }]}>{initial}</Text>
+        </View>
       </View>
+      <ClubSwitcherSheet visible={sheetVisible} onClose={closeSheet} />
     </View>
   );
 }
@@ -39,5 +64,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  clubButton: {
+    minWidth: 0,
+  },
   title: {},
+  avatar: {},
 });

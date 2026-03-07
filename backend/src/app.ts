@@ -13,6 +13,7 @@ import roundRoutes from './routes/round.routes';
 import teamRoutes from './routes/team.routes';
 import userRoutes from './routes/user.routes';
 import workoutRoutes from './routes/workout.routes';
+import notificationRoutes from './routes/notification.routes';
 
 const app = express();
 
@@ -74,6 +75,7 @@ app.use('/api/clubs', clubRoutes);
 app.use('/api', teamRoutes);
 app.use('/api', userRoutes);
 app.use('/api', workoutRoutes);
+app.use('/api', notificationRoutes);
 
 app.use(errorHandler);
 

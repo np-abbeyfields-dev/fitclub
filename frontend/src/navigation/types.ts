@@ -6,8 +6,10 @@ export type RootStackParamList = {
   MainTabs: undefined;
   Settings: undefined;
   PastRounds: undefined;
+  RoundSummary: { roundId: string; roundName: string };
   RoundLeaderboard: { roundId: string; roundName: string };
   Rounds: undefined;
+  RoundConfig: { mode: 'create'; clubId: string } | { mode: 'edit'; roundId: string };
   Members: undefined;
   TeamsManagement: undefined;
   ClubInfo: undefined;
@@ -26,7 +28,7 @@ export type HomeStackParamList = {
   Home: undefined;
   JoinClub: undefined;
   CreateClub: undefined;
-  WorkoutNew: { repeatLast?: boolean } | undefined;
+  WorkoutNew: { repeatLast?: boolean; repeatWorkoutIndex?: number } | undefined;
 };
 
 /** Web app sidebar routes (stack navigator when Platform.OS === 'web') */
@@ -36,6 +38,7 @@ export type WebStackParamList = {
   Teams: undefined;
   Members: undefined;
   Rounds: undefined;
+  RoundConfig: { mode: 'create'; clubId: string } | { mode: 'edit'; roundId: string };
   Analytics: undefined;
   Settings: undefined;
   WorkoutNew: undefined;

@@ -1,6 +1,8 @@
 import { Response } from 'express';
 import { ClubService } from '../services/club.service';
 import { DashboardService } from '../services/dashboard.service';
+import * as StatsService from '../services/stats.service';
+import * as FeedService from '../services/feed.service';
 import { AuthRequest, ApiResponse } from '../types';
 
 export class ClubController {
@@ -92,5 +94,44 @@ export class ClubController {
     }
     await ClubService.removeMember(clubId, adminUserId, userId);
     res.json({ success: true, message: 'Member removed.' } as ApiResponse);
+  }
+
+  /** GET /clubs/:clubId/rounds/:roundId/stats/me — current user stats for round (§7.8). */
+  static async getStatsMe(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    const roundId = Array.isArray(req.params.roundId) ? req.params.roundId[0] : req.params.roundId;
+    if (!clubId || !roundId) {
+      res.status(400).json({ success: false, error: 'Club ID and round ID required.' } as ApiResponse);
+      return;
+    }
+    const data = await StatsService.getStatsMe(clubId, roundId, userId);
+    res.json({ success: true, data } as ApiResponse);
+  }
+
+  /** GET /clubs/:clubId/stats/overview — club stats overview (§7.8). */
+  static async getStatsOverview(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    if (!clubId) {
+      res.status(400).json({ success: false, error: 'Club ID required.' } as ApiResponse);
+      return;
+    }
+    const data = await StatsService.getClubStatsOverview(clubId, userId);
+    res.json({ success: true, data } as ApiResponse);
+  }
+
+  /** GET /clubs/:clubId/feed — activity feed (§7.9). */
+  static async getFeed(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    if (!clubId) {
+      res.status(400).json({ success: false, error: 'Club ID required.' } as ApiResponse);
+      return;
+    }
+    const before = typeof req.query?.before === 'string' ? req.query.before : undefined;
+    const limit = req.query?.limit != null ? Number(req.query.limit) : undefined;
+    const data = await FeedService.getClubFeed(clubId, userId, { before, limit });
+    res.json({ success: true, data } as ApiResponse);
   }
 }

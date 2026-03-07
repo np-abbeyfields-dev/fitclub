@@ -4,7 +4,7 @@
 
 import { spacing, radius, shadows as shadowTokens, animation } from './tokens';
 import { lightPalette } from './colors';
-import { typography as typeScale } from './typography';
+import { typography as typeScale, fontFamily } from './typography';
 
 const c = lightPalette;
 
@@ -29,9 +29,13 @@ const lightColors = {
   warningMuted: '#FEF3C7',
 
   surface: c.card,
+  surfaceElevated: c.card,
   statCardBackground: c.card,
   inputBackground: c.card,
   borderLight: '#F1F5F9',
+
+  /** Same as success in light; used for weekly activity streak in dark (#16A34A). */
+  successActivity: c.success,
 
   heroBackground: c.primary,
   heroGradientStart: c.primary,
@@ -50,6 +54,11 @@ const lightColors = {
   goldMuted: '#FEF9C3',
   silverMuted: '#F1F5F9',
   bronzeMuted: '#FFEDD5',
+
+  /** Onboarding "How FitClub Works" card backgrounds */
+  onboardingCardJoin: '#EEF4FF',
+  onboardingCardCompete: '#FFF6E8',
+  onboardingCardLog: '#ECFDF5',
 
   authGradient: [c.primary, '#1D4ED8', '#1E40AF'] as readonly [string, string, string],
   authLogoGradient: ['#3B82F6', c.primary] as readonly [string, string],
@@ -74,8 +83,8 @@ const typography = {
   h1: { ...t.hero, fontWeight: '800' as const, lineHeight: t.hero.fontSize + 8 },
   h2: { ...t.title, lineHeight: t.title.fontSize + 6 },
   h3: { ...t.section, lineHeight: t.section.fontSize + 4 },
-  bodySmall: { fontSize: 14, fontWeight: '400' as const, lineHeight: 20 },
-  label: { fontSize: t.section.fontSize, fontWeight: '600' as const, lineHeight: t.section.fontSize + 6 },
+  bodySmall: { fontSize: 14, fontFamily: fontFamily.regular, lineHeight: 20 },
+  label: { fontSize: t.section.fontSize, fontFamily: fontFamily.semiBold, lineHeight: t.section.fontSize + 6 },
 } as const;
 
 /** Shadow presets — cards use subtle elevation to contrast with background */

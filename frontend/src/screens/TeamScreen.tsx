@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -12,8 +13,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme';
 import { useClub } from '../context/ClubContext';
 import { useAuthStore } from '../store/authStore';
@@ -22,8 +23,7 @@ import { teamService, type Team } from '../services/teamService';
 import { Card, PointsText, LeaderboardRank } from '../components';
 import type { TeamDetail, TeamMember } from '../types/team';
 import type { ClubMember } from '../services/clubService';
-
-const RANK_EMOJI: Record<1 | 2 | 3, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
+import { RANK_EMOJI } from '../constants/rank';
 
 function MemberRow({
   member,
@@ -85,7 +85,6 @@ function MemberRow({
 
 export default function TeamScreen() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { colors, spacing, radius, typography, shadows } = theme;
   const { selectedClub, canManageTeam } = useClub();
   const currentUserId = useAuthStore((s) => s.user?.id);
@@ -112,8 +111,11 @@ export default function TeamScreen() {
   const [joinBusy, setJoinBusy] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
+  const loadingForClubIdRef = useRef<string | null>(null);
+
   const load = useCallback(async () => {
-    if (!selectedClub) {
+    const clubId = selectedClub?.id ?? null;
+    if (!clubId) {
       setRoundInfo(null);
       setTeam(null);
       setTeamsList([]);
@@ -121,9 +123,11 @@ export default function TeamScreen() {
       setError(null);
       return;
     }
+    loadingForClubIdRef.current = clubId;
     setError(null);
     try {
-      const dash = await clubService.getDashboard(selectedClub.id);
+      const dash = await clubService.getDashboard(clubId);
+      if (loadingForClubIdRef.current !== clubId) return;
       const active = dash.data?.activeRound;
       if (!active?.id) {
         setRoundInfo(null);
@@ -137,6 +141,7 @@ export default function TeamScreen() {
 
       try {
         const res = await teamService.getMyTeam(active.id);
+        if (loadingForClubIdRef.current !== clubId) return;
         const d = res.data;
         const members: (TeamMember & { userId?: string; isTeamLead?: boolean })[] = (d.members || []).map((m: any, i: number) => ({
           id: m.id,
@@ -155,24 +160,45 @@ export default function TeamScreen() {
           members,
         });
       } catch {
-        setTeam(null);
+        if (loadingForClubIdRef.current === clubId) setTeam(null);
       }
 
       const teamsRes = await teamService.listByRound(active.id);
+      if (loadingForClubIdRef.current !== clubId) return;
       setTeamsList(teamsRes.data || []);
     } catch (e) {
+      if (loadingForClubIdRef.current !== clubId) return;
       setError(e instanceof Error ? e.message : 'Failed to load');
       setRoundInfo(null);
       setTeam(null);
     } finally {
-      setLoading(false);
+      if (loadingForClubIdRef.current === clubId) {
+        loadingForClubIdRef.current = null;
+        setLoading(false);
+      }
     }
   }, [selectedClub?.id]);
 
   useEffect(() => {
+    if (!selectedClub?.id) {
+      setRoundInfo(null);
+      setTeam(null);
+      setTeamsList([]);
+      setLoading(false);
+      return;
+    }
+    setRoundInfo(null);
+    setTeam(null);
+    setTeamsList([]);
     setLoading(true);
     load();
-  }, [load]);
+  }, [selectedClub?.id, load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (selectedClub?.id) load();
+    }, [selectedClub?.id, load])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -315,7 +341,7 @@ export default function TeamScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ScrollView
-          contentContainerStyle={[styles.scrollContent, { padding: spacing.md, paddingTop: insets.top + spacing.md, paddingBottom: spacing.xxxl }]}
+          contentContainerStyle={[styles.scrollContent, { padding: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxxl }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
         >
@@ -390,19 +416,24 @@ export default function TeamScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { padding: spacing.md, paddingTop: insets.top + spacing.sm, paddingBottom: spacing.xxxl + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { padding: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxxl + 100 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Current Round Header */}
-        <View style={[styles.roundHeader, { padding: spacing.md, marginBottom: spacing.sm, backgroundColor: colors.heroGradientStart, borderRadius: radius.sm, overflow: 'hidden', ...shadows.sm }]}>
+        {/* 1. Current Round Header — subtle gradient */}
+        <LinearGradient
+          colors={[colors.heroGradientStart, colors.heroGradientEnd] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.roundHeader, { padding: spacing.md, marginBottom: spacing.sm, borderRadius: radius.sm, overflow: 'hidden', ...shadows.sm }]}
+        >
           <Text style={[typography.caption, { color: colors.heroTextMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }]}>{roundInfo.name}</Text>
           <Text style={[typography.h3, { color: colors.heroText, fontWeight: '800', marginTop: 4 }]}>{team.name}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm }}>
             <Text style={[typography.caption, { color: colors.heroTextMuted, fontWeight: '700' }]}>{roundInfo.daysLeft} days left</Text>
             <Text style={[typography.caption, { color: colors.heroText, fontWeight: '800' }]}>{team.totalPoints.toLocaleString()} pts</Text>
           </View>
-        </View>
+        </LinearGradient>
 
         {/* 2. Team Performance Card */}
         <View style={[styles.perfCard, { padding: spacing.md, marginBottom: spacing.md, backgroundColor: colors.card, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, ...shadows.sm }]}>
@@ -410,7 +441,7 @@ export default function TeamScreen() {
             <View>
               <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', textTransform: 'uppercase' }]}>Team rank</Text>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
-                <Text style={[typography.h2, { color: colors.text, fontWeight: '800' }]}>#{team.rank}</Text>
+                <Text style={[typography.h2, { color: colors.competition, fontWeight: '800' }]}>#{team.rank}</Text>
                 {isTopThree && <Text style={{ fontSize: 20 }}>{RANK_EMOJI[team.rank as 1 | 2 | 3]}</Text>}
               </View>
             </View>
@@ -425,11 +456,13 @@ export default function TeamScreen() {
           </View>
         </View>
 
-        {/* 3. Members List */}
+        {/* 3. Members List — keyed by club + team so list remounts when club/team changes */}
         <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.sm }]}>Members</Text>
-        {team.members.map((member) => (
-          <MemberRow key={member.id} member={member} theme={theme} canManage={canManage} onRemove={() => removeMember(member)} />
-        ))}
+        <View key={`${selectedClub?.id ?? ''}-${team.id}`}>
+          {team.members.map((member) => (
+            <MemberRow key={member.id} member={member} theme={theme} canManage={canManage} onRemove={() => removeMember(member)} />
+          ))}
+        </View>
 
         {/* 4. Team Management */}
         {canManage && (

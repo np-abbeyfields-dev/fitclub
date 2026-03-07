@@ -101,6 +101,12 @@ export async function logWorkout(roundId: string, userId: string, input: LogWork
   const activityType = (input.activityType || '').trim();
   if (!activityType) throw new ValidationError('Activity type is required.');
 
+  const workoutMaster = await prisma.workoutMaster.findUnique({
+    where: { workoutType: activityType },
+    select: { id: true },
+  });
+  if (!workoutMaster) throw new ValidationError('Unknown workout type. Choose an activity from the list.');
+
   const durationMinutes = input.durationMinutes != null ? Number(input.durationMinutes) : null;
   const distanceKm = input.distanceKm != null ? Number(input.distanceKm) : null;
   const rawPoints = calculateRawPoints(durationMinutes, distanceKm);
@@ -119,6 +125,7 @@ export async function logWorkout(roundId: string, userId: string, input: LogWork
     where: {
       userId,
       roundId,
+      reasonType: 'workout',
       createdAt: { gte: todayStart, lt: todayEnd },
     },
     _sum: { finalAwardedPoints: true },
@@ -134,15 +141,25 @@ export async function logWorkout(roundId: string, userId: string, input: LogWork
     source: 'workout',
   });
 
+  const estimatedCalories = (durationMinutes ?? 0) * 6; // same as dashboard
+
   const result = await prisma.$transaction(async (tx) => {
+    const membership = await tx.teamMembership.findUnique({
+      where: { userId_roundId: { userId, roundId } },
+      include: { Team: { include: { Memberships: true } } },
+    });
+    const teamId = membership?.teamId ?? null;
+
     const workout = await tx.workout.create({
       data: {
         userId,
         roundId,
         activityType,
+        workoutMasterId: workoutMaster.id,
         durationMinutes: durationMinutes ?? undefined,
         distanceKm: distanceKm ?? undefined,
         proofUrl: input.proofUrl ?? undefined,
+        notes: input.note ? String(input.note).trim() || undefined : undefined,
         loggedAt,
       },
     });
@@ -151,6 +168,8 @@ export async function logWorkout(roundId: string, userId: string, input: LogWork
         workoutId: workout.id,
         userId,
         roundId,
+        teamId,
+        reasonType: 'workout',
         rawPoints,
         cappedPoints: rawPoints,
         dailyAdjustedPoints: finalAwardedPoints,
@@ -158,8 +177,178 @@ export async function logWorkout(roundId: string, userId: string, input: LogWork
         ruleSnapshotJson: ruleSnapshot,
       },
     });
+
+    const now = new Date();
+    await tx.userStats.upsert({
+      where: {
+        userId_clubId_roundId: { userId, clubId: round.clubId, roundId },
+      },
+      create: {
+        userId,
+        clubId: round.clubId,
+        roundId,
+        totalPoints: finalAwardedPoints,
+        totalWorkouts: 1,
+        totalCalories: estimatedCalories,
+        streakDays: 0,
+        updatedAt: now,
+      },
+      update: {
+        totalPoints: { increment: finalAwardedPoints },
+        totalWorkouts: { increment: 1 },
+        totalCalories: { increment: estimatedCalories },
+        updatedAt: now,
+      },
+    });
+
+    if (membership) {
+      const teamIdForStats = membership.teamId;
+      const memberCount = membership.Team.Memberships.length;
+      await tx.teamStats.upsert({
+        where: {
+          teamId_roundId: { teamId: teamIdForStats, roundId },
+        },
+        create: {
+          teamId: teamIdForStats,
+          clubId: round.clubId,
+          roundId,
+          totalPoints: finalAwardedPoints,
+          totalWorkouts: 1,
+          memberCount,
+          updatedAt: now,
+        },
+        update: {
+          totalPoints: { increment: finalAwardedPoints },
+          totalWorkouts: { increment: 1 },
+          updatedAt: now,
+        },
+      });
+    }
+
+    await tx.activityFeed.create({
+      data: {
+        clubId: round.clubId,
+        actorUserId: userId,
+        type: 'WORKOUT_LOGGED',
+        metadataJson: JSON.stringify({
+          workoutId: workout.id,
+          roundId,
+          points: finalAwardedPoints,
+          activityType,
+        }),
+      },
+    });
+
+    const workoutDays = await tx.workout.findMany({
+      where: { userId, roundId },
+      select: { loggedAt: true },
+    });
+    const daySet = new Set(workoutDays.map((w) => new Date(w.loggedAt).toISOString().slice(0, 10)));
+    let streakDays = 0;
+    const checkDate = new Date();
+    for (;;) {
+      const key = checkDate.toISOString().slice(0, 10);
+      if (!daySet.has(key)) break;
+      streakDays++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    const STREAK_MILESTONES = [3, 7, 14, 30];
+    if (STREAK_MILESTONES.includes(streakDays)) {
+      await tx.activityFeed.create({
+        data: {
+          clubId: round.clubId,
+          actorUserId: userId,
+          type: 'STREAK_REACHED',
+          metadataJson: JSON.stringify({ roundId, streakDays }),
+        },
+      });
+    }
+
     return { id: workout.id, points: finalAwardedPoints };
   });
 
   return result;
+}
+
+/**
+ * GET workouts: list current user's workouts for a round, or recent across clubs (FITCLUB_MASTER_SPEC §7.6).
+ */
+export async function listMyWorkouts(userId: string, options: { roundId?: string; recent?: boolean; limit?: number }) {
+  const limit = Math.min(options.limit ?? 20, 50);
+  if (options.roundId) {
+    const workouts = await prisma.workout.findMany({
+      where: { userId, roundId: options.roundId },
+      orderBy: { loggedAt: 'desc' },
+      take: limit,
+      include: { ScoreLedger: { select: { finalAwardedPoints: true } } },
+    });
+    return workouts.map((w) => ({
+      id: w.id,
+      roundId: w.roundId,
+      activityType: w.activityType,
+      durationMinutes: w.durationMinutes,
+      distanceKm: w.distanceKm,
+      points: Math.round(w.ScoreLedger?.finalAwardedPoints ?? 0),
+      loggedAt: w.loggedAt.toISOString(),
+    }));
+  }
+  const workouts = await prisma.workout.findMany({
+    where: { userId },
+    orderBy: { loggedAt: 'desc' },
+    take: limit,
+    include: { Round: { select: { id: true, name: true, clubId: true } }, ScoreLedger: { select: { finalAwardedPoints: true } } },
+  });
+  return workouts.map((w) => ({
+    id: w.id,
+    roundId: w.roundId,
+    roundName: w.Round.name,
+    activityType: w.activityType,
+    durationMinutes: w.durationMinutes,
+    distanceKm: w.distanceKm,
+    points: Math.round(w.ScoreLedger?.finalAwardedPoints ?? 0),
+    loggedAt: w.loggedAt.toISOString(),
+  }));
+}
+
+/**
+ * GET workouts/:id — get single workout (FITCLUB_MASTER_SPEC §7.6).
+ */
+export async function getWorkoutById(workoutId: string, userId: string) {
+  const workout = await prisma.workout.findUnique({
+    where: { id: workoutId },
+    include: { Round: true, ScoreLedger: true },
+  });
+  if (!workout) throw new NotFoundError('Workout not found.');
+  await ClubService.ensureMember(userId, workout.Round.clubId);
+  return {
+    id: workout.id,
+    roundId: workout.roundId,
+    activityType: workout.activityType,
+    durationMinutes: workout.durationMinutes,
+    distanceKm: workout.distanceKm,
+    proofUrl: workout.proofUrl,
+    notes: workout.notes ?? undefined,
+    points: workout.ScoreLedger ? Math.round(workout.ScoreLedger.finalAwardedPoints) : 0,
+    loggedAt: workout.loggedAt.toISOString(),
+    createdAt: workout.createdAt.toISOString(),
+  };
+}
+
+/**
+ * DELETE workouts/:id — delete workout (same user or admin). Removes Workout and ScoreLedger (cascade).
+ * FITCLUB_MASTER_SPEC §7.6: maybe only within safe window or admin only later.
+ */
+export async function deleteWorkout(workoutId: string, userId: string, asAdmin: boolean) {
+  const { AuthorizationError } = await import('../utils/errors');
+  const workout = await prisma.workout.findUnique({
+    where: { id: workoutId },
+    include: { Round: true, ScoreLedger: true },
+  });
+  if (!workout) throw new NotFoundError('Workout not found.');
+  const membership = await ClubService.ensureMember(userId, workout.Round.clubId);
+  if (workout.userId !== userId && membership.role !== 'admin') {
+    throw new AuthorizationError('Only the workout owner or an admin can delete it.');
+  }
+  await prisma.workout.delete({ where: { id: workoutId } });
+  return { success: true };
 }

@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { TeamService } from '../services/team.service';
+import * as StatsService from '../services/stats.service';
 import { AuthRequest, ApiResponse } from '../types';
 
 function param(req: AuthRequest, key: string): string | undefined {
@@ -89,6 +90,18 @@ export class TeamController {
       res.status(404).json({ success: false, error: 'You are not in a team for this round.' } as ApiResponse);
       return;
     }
+    res.json({ success: true, data } as ApiResponse);
+  }
+
+  /** GET /rounds/:roundId/teams/:teamId/stats — team stats for round (§7.8). */
+  static async getTeamStats(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const teamId = param(req, 'teamId');
+    if (!teamId) {
+      res.status(400).json({ success: false, error: 'Team ID required.' } as ApiResponse);
+      return;
+    }
+    const data = await StatsService.getTeamStats(teamId, userId);
     res.json({ success: true, data } as ApiResponse);
   }
 }

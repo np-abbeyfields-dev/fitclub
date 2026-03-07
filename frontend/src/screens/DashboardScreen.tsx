@@ -134,15 +134,6 @@ export default function DashboardScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.header, { marginBottom: spacing.lg }]}>
-        <Text style={[typography.h1, { color: colors.text }]} numberOfLines={1}>{selectedClub.name}</Text>
-        {isAdmin && (
-          <View style={[styles.badge, { backgroundColor: colors.primaryMuted, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs, borderRadius: radius.sm }]}>
-            <Text style={[typography.caption, { fontWeight: '700', color: colors.primary }]}>Admin</Text>
-          </View>
-        )}
-      </View>
-
       {error && (
         <View style={[styles.errorBanner, { backgroundColor: colors.errorMuted, padding: spacing.sm, borderRadius: radius.md, marginBottom: spacing.sm }]}>
           <Text style={[typography.bodySmall, { color: colors.error }]}>{error}</Text>
@@ -179,16 +170,6 @@ export default function DashboardScreen() {
             <Ionicons name="person-add-outline" size={20} color={colors.textInverse} />
             <Text style={[typography.label, { color: colors.textInverse }]}>Invite member</Text>
           </TouchableOpacity>
-          {!activeRound && (
-            <TouchableOpacity
-              style={[styles.secondaryBtn, { borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }]}
-              onPress={() => (navigation as any).navigate('Rounds')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-              <Text style={[typography.label, { color: colors.primary }]}>Create challenge</Text>
-            </TouchableOpacity>
-          )}
         </View>
       )}
 
@@ -204,8 +185,6 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: {},
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  badge: {},
   errorBanner: {},
   cardsRow: { flexDirection: 'row', flexWrap: 'wrap' },
   statCard: {},

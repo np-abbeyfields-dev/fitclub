@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +19,9 @@ import { useClub } from '../context/ClubContext';
 import { useAuthStore } from '../store/authStore';
 import { clubService, type ClubMember, type ClubRole } from '../services/clubService';
 import { roundService } from '../services/roundService';
+
+const ROLES: ClubRole[] = ['admin', 'team_lead', 'member'];
+const ROLE_LABEL: Record<ClubRole, string> = { admin: 'Admin', team_lead: 'Team Lead', member: 'Member' };
 
 export default function MembersScreen() {
   const navigation = useNavigation();
@@ -32,6 +36,7 @@ export default function MembersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const load = useCallback(async () => {
     if (!selectedClub) {
@@ -69,6 +74,15 @@ export default function MembersScreen() {
     setRefreshing(true);
     await Promise.all([refreshClubs(), load()]);
   }, [refreshClubs, load]);
+
+  const filteredMembers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter(
+      (m) =>
+        m.displayName.toLowerCase().includes(q) || (m.email && m.email.toLowerCase().includes(q))
+    );
+  }, [members, searchQuery]);
 
   const setRole = useCallback(async (userId: string, role: ClubRole) => {
     if (!selectedClub) return;
@@ -151,12 +165,50 @@ export default function MembersScreen() {
           </TouchableOpacity>
         )}
         <View style={{ flex: 1 }}>
-          <Text style={[typography.h1, { color: colors.text }]}>Members</Text>
+          <Text style={[typography.h1, { color: colors.text }]}>Manage Members</Text>
           <Text style={[typography.bodySmall, { color: colors.textSecondary, marginTop: spacing.xxs }]}>
-            {members.length} member{members.length !== 1 ? 's' : ''}
+            Update roles or remove members · {members.length} member{members.length !== 1 ? 's' : ''}
           </Text>
         </View>
       </View>
+
+      {members.length > 2 && (
+        <View
+          style={[
+            styles.searchWrap,
+            {
+              marginBottom: spacing.sm,
+              backgroundColor: theme.colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radius.md,
+              paddingHorizontal: spacing.sm,
+            },
+          ]}
+        >
+          <Ionicons name="search-outline" size={18} color={colors.textMuted} style={{ marginRight: spacing.xs }} />
+          <TextInput
+            style={[
+              typography.body,
+              {
+                flex: 1,
+                color: colors.text,
+                paddingVertical: spacing.sm,
+                paddingRight: spacing.sm,
+              },
+            ]}
+            placeholder="Search by name or email"
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8} style={{ padding: spacing.xs }}>
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {error && (
         <View style={[styles.errorBanner, { backgroundColor: colors.errorMuted, padding: spacing.sm, borderRadius: radius.md, marginBottom: spacing.sm }]}>
@@ -165,7 +217,7 @@ export default function MembersScreen() {
       )}
 
       <View style={{ gap: spacing.sm }}>
-        {members.map((m) => {
+        {filteredMembers.map((m) => {
           const isYou = m.userId === currentUserId;
           const busy = actioningId === m.userId;
           return (
@@ -185,7 +237,7 @@ export default function MembersScreen() {
                   <View style={[styles.metaRow, { marginTop: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }]}>
                     <View style={[styles.roleBadge, { backgroundColor: m.role === 'admin' ? colors.primaryMuted : m.role === 'team_lead' ? colors.accentMuted : colors.borderLight, paddingHorizontal: spacing.xs, paddingVertical: 2, borderRadius: radius.sm }]}>
                       <Text style={[typography.caption, { fontWeight: '600', color: m.role === 'admin' ? colors.primary : m.role === 'team_lead' ? colors.accent : colors.textSecondary }]}>
-                        {m.role === 'team_lead' ? 'Team Lead' : m.role === 'admin' ? 'Admin' : 'Member'}
+                        {ROLE_LABEL[m.role]}
                       </Text>
                     </View>
                     {activeRoundId && m.team && (
@@ -198,14 +250,14 @@ export default function MembersScreen() {
                 {!isYou && (
                   <View style={[styles.actions, { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }]}>
                     {busy && <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: spacing.xs }} />}
-                    {(['admin', 'team_lead', 'member'] as const).map((r) => (
+                    {ROLES.map((r) => (
                       <TouchableOpacity
                         key={r}
-                        style={[styles.roleChip, { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, borderWidth: 1, borderColor: m.role === r ? colors.primary : colors.border, backgroundColor: m.role === r ? colors.primaryMuted : 'transparent' }]}
+                        style={[styles.roleChip, { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, borderWidth: 1, borderColor: m.role === r ? colors.primary : colors.border, backgroundColor: m.role === r ? colors.primaryMuted : colors.transparent }]}
                         onPress={() => setRole(m.userId, r)}
                         disabled={busy}
                       >
-                        <Text style={[typography.caption, { fontWeight: '600', color: m.role === r ? colors.primary : colors.textSecondary }]}>{r === 'team_lead' ? 'Team Lead' : r === 'admin' ? 'Admin' : 'Member'}</Text>
+                        <Text style={[typography.caption, { fontWeight: '600', color: m.role === r ? colors.primary : colors.textSecondary }]}>{ROLE_LABEL[r]}</Text>
                       </TouchableOpacity>
                     ))}
                     <TouchableOpacity
@@ -223,10 +275,12 @@ export default function MembersScreen() {
         })}
       </View>
 
-      {members.length === 0 && !loading && (
+      {filteredMembers.length === 0 && !loading && (
         <View style={[styles.empty, { padding: spacing.xl }]}>
-          <Ionicons name="people-outline" size={40} color={colors.textMuted} />
-          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.sm }]}>No members yet.</Text>
+          <Ionicons name={searchQuery.trim() ? 'search-outline' : 'people-outline'} size={40} color={colors.textMuted} />
+          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.sm }]}>
+            {searchQuery.trim() ? 'No members match your search.' : 'No members yet.'}
+          </Text>
         </View>
       )}
     </ScrollView>
@@ -237,6 +291,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: {},
   header: {},
+  searchWrap: { flexDirection: 'row', alignItems: 'center' },
   errorBanner: {},
   memberCard: {},
   memberRow: { flexDirection: 'row', alignItems: 'center' },

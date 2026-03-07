@@ -10,9 +10,10 @@ import {
   UIManager,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
+import { LeaderboardPodium, RoundCountdown } from '../components';
 import { useClub } from '../context/ClubContext';
 import { clubService } from '../services/clubService';
 import { roundService } from '../services/roundService';
@@ -22,18 +23,24 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const RANK_MEDAL: Record<1 | 2 | 3, string> = {
-  1: '🥇',
-  2: '🥈',
-  3: '🥉',
-};
-
-const PODIUM_HEIGHTS = { 1: 88, 2: 72, 3: 72 } as const;
+/** Gap label for non-first: "+N behind #1" or "+N ahead of #N" */
+function getPodiumGapLabel(
+  entry: LeaderboardEntry,
+  firstPlacePoints: number,
+  fourthPlacePoints?: number
+): string | null {
+  if (entry.rank === 1) return null;
+  const gapToFirst = firstPlacePoints - entry.points;
+  if (entry.rank === 3 && fourthPlacePoints != null && entry.points > fourthPlacePoints) {
+    return `+${(entry.points - fourthPlacePoints).toLocaleString()} ahead of #4`;
+  }
+  return `+${gapToFirst.toLocaleString()} behind #1`;
+}
 
 export default function LeaderboardScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { colors, spacing: s, radius: r, typography, shadows } = theme;
+  const { colors, spacing: s, radius: r, typography, shadows, isDark } = theme;
   const { selectedClub } = useClub();
 
   const [tab, setTab] = useState<LeaderboardTab>('teams');
@@ -42,6 +49,7 @@ export default function LeaderboardScreen() {
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null);
   const [roundName, setRoundName] = useState<string>('');
   const [roundDaysLeft, setRoundDaysLeft] = useState<number>(0);
+  const [roundEndDate, setRoundEndDate] = useState<string | null>(null);
   const [individuals, setIndividuals] = useState<LeaderboardEntry[]>([]);
   const [teams, setTeams] = useState<LeaderboardEntry[]>([]);
   const prevIndRanks = React.useRef<Map<string, number>>(new Map());
@@ -52,6 +60,7 @@ export default function LeaderboardScreen() {
       setActiveRoundId(null);
       setRoundName('');
       setRoundDaysLeft(0);
+      setRoundEndDate(null);
       setIndividuals([]);
       setTeams([]);
       prevIndRanks.current = new Map();
@@ -67,6 +76,7 @@ export default function LeaderboardScreen() {
       setActiveRoundId(roundId);
       setRoundName(round?.name ?? '');
       setRoundDaysLeft(round?.daysLeft ?? 0);
+      setRoundEndDate(round?.endDate ?? null);
       if (!roundId) {
         setIndividuals([]);
         setTeams([]);
@@ -112,6 +122,13 @@ export default function LeaderboardScreen() {
   useEffect(() => {
     loadLeaderboard();
   }, [loadLeaderboard]);
+
+  // Refetch when screen gains focus (e.g. after logging a workout) so rank change ▲/▼ reflects previous vs new position.
+  useFocusEffect(
+    useCallback(() => {
+      if (selectedClub?.id && activeRoundId) loadLeaderboard();
+    }, [selectedClub?.id, activeRoundId, loadLeaderboard])
+  );
 
   const data = tab === 'individuals' ? individuals : teams;
   const myEntry = data.find((e) => e.isCurrentUser) ?? null;
@@ -175,33 +192,33 @@ export default function LeaderboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
-        {/* 1. Header: round name, days left, total pts, View Past Rounds link */}
+        {/* 1. Round header — dark surface, days left, total pts (orange) */}
         <View
           style={[
             styles.roundHeader,
             {
-              backgroundColor: colors.card,
+              backgroundColor: colors.surfaceElevated ?? colors.card,
               borderWidth: 1,
               borderColor: colors.border,
-              borderRadius: r.sm,
+              borderRadius: r.md,
               paddingVertical: s.sm,
               paddingHorizontal: s.md,
               marginBottom: s.sm,
-              ...shadows.sm,
+              ...shadows.card,
             },
           ]}
         >
           <View style={[styles.roundHeaderRow, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: s.xs }]}>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[typography.h3, { color: colors.text, fontWeight: '800' }]} numberOfLines={1}>
+              <Text style={[typography.title, { color: colors.text, fontWeight: '800', fontSize: 22 }]} numberOfLines={1}>
                 {roundName || 'Active round'}
               </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.sm, marginTop: 2 }}>
-                <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
-                  {roundDaysLeft} day{roundDaysLeft === 1 ? '' : 's'} left
-                </Text>
-                <View style={[styles.roundTotal, { backgroundColor: colors.border, width: 1, height: 12 }]} />
-                <Text style={[typography.label, { color: colors.primary, fontWeight: '700' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.sm, marginTop: s.xs, flexWrap: 'wrap' }}>
+                {activeRoundId ? (
+                  <RoundCountdown daysLeft={roundDaysLeft} endDate={roundEndDate ?? undefined} variant="pill" />
+                ) : null}
+                <View style={{ backgroundColor: colors.border, width: 1, height: 14 }} />
+                <Text style={[typography.label, { color: colors.energy, fontWeight: '800' }]}>
                   {totalPoints.toLocaleString()} pts
                 </Text>
               </View>
@@ -218,7 +235,7 @@ export default function LeaderboardScreen() {
           </View>
         </View>
 
-        {/* 2. Competitive Insight Strip: leading or gap to #1 */}
+        {/* 2. You're leading / gap to #1 — dark bar, high-contrast text, gold icon when leading */}
         {myEntry && (
           <View
             style={[
@@ -227,35 +244,54 @@ export default function LeaderboardScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: myEntry.rank === 1 ? colors.accentMuted : colors.statCardBackground,
+                backgroundColor: isDark ? colors.surface : (colors.surfaceElevated ?? colors.card),
                 borderWidth: 1,
-                borderColor: myEntry.rank === 1 ? colors.accent : colors.border,
-                borderRadius: r.sm,
-                paddingVertical: s.xs,
-                paddingHorizontal: s.sm,
+                borderColor: colors.border,
+                borderRadius: r.md,
+                paddingVertical: s.sm,
+                paddingHorizontal: s.md,
                 marginBottom: s.sm,
+                ...shadows.sm,
               },
             ]}
           >
-            {myEntry.rank === 1 ? (
-              <>
-                <Ionicons name="trophy" size={16} color={colors.accent} />
-                <Text style={[typography.label, { color: colors.textPrimary, fontWeight: '800', marginLeft: s.sm }]}>
-                  You're leading
-                </Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="trophy-outline" size={14} color={colors.primary} />
-                <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '700', marginLeft: s.xxs }]}>
-                  {gapToFirst.toLocaleString()} pts to #1
-                </Text>
-              </>
-            )}
+            <Ionicons
+              name="trophy"
+              size={20}
+              color={myEntry.rank === 1 ? colors.gold : colors.textSecondary}
+            />
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: colors.textPrimary,
+                  fontWeight: '700',
+                  marginLeft: s.sm,
+                  fontSize: 15,
+                },
+              ]}
+            >
+              {myEntry.rank === 1 ? "You're leading this round" : `+${gapToFirst.toLocaleString()} behind #1`}
+            </Text>
           </View>
         )}
 
-        <View style={[styles.segmentWrap, { flexDirection: 'row', backgroundColor: colors.card, borderRadius: r.md, padding: s.xxs, marginBottom: s.sm, borderWidth: 1, borderColor: colors.border, ...shadows.card }]}>
+        {/* 3. Teams / Individuals toggle — dark surface, primary only for selected */}
+        <View
+          style={[
+            styles.segmentWrap,
+            {
+              flexDirection: 'row',
+              backgroundColor: colors.surfaceElevated ?? colors.card,
+              borderRadius: r.md,
+              padding: 4,
+              marginBottom: s.sm,
+              borderWidth: 1,
+              borderColor: colors.border,
+              ...shadows.sm,
+            },
+          ]}
+        >
           <TouchableOpacity
             onPress={() => onTabChange('teams')}
             activeOpacity={0.85}
@@ -264,13 +300,13 @@ export default function LeaderboardScreen() {
               {
                 flex: 1,
                 paddingVertical: s.sm,
-                borderRadius: r.sm - 2,
-                backgroundColor: tab === 'teams' ? colors.primary : 'transparent',
+                borderRadius: r.sm,
+                backgroundColor: tab === 'teams' ? colors.primary : colors.transparent,
               },
             ]}
           >
             <Ionicons name="people" size={18} color={tab === 'teams' ? colors.textInverse : colors.textSecondary} />
-            <Text style={[typography.label, { fontWeight: '700', color: tab === 'teams' ? colors.textInverse : colors.textPrimary }]}>
+            <Text style={[typography.label, { fontWeight: '800', color: tab === 'teams' ? colors.textInverse : colors.textPrimary }]}>
               Teams
             </Text>
           </TouchableOpacity>
@@ -282,124 +318,48 @@ export default function LeaderboardScreen() {
               {
                 flex: 1,
                 paddingVertical: s.sm,
-                borderRadius: r.sm - 2,
-                backgroundColor: tab === 'individuals' ? colors.primary : 'transparent',
+                borderRadius: r.sm,
+                backgroundColor: tab === 'individuals' ? colors.primary : colors.transparent,
               },
             ]}
           >
             <Ionicons name="person" size={18} color={tab === 'individuals' ? colors.textInverse : colors.textSecondary} />
-            <Text style={[typography.label, { fontWeight: '700', color: tab === 'individuals' ? colors.textInverse : colors.textPrimary }]}>
+            <Text style={[typography.label, { fontWeight: '800', color: tab === 'individuals' ? colors.textInverse : colors.textPrimary }]}>
               Individuals
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* 3. Segmented Toggle — Teams (default) / Individuals */}
+        {/* 4. Podium — medals, enlarged #1, gold/silver/bronze, gap labels */}
         {top3.length > 0 && (
-          <View style={[styles.podiumRow, { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginBottom: s.sm, gap: s.xs }]}>
-            {/* #2 left */}
-            {top3.find((e) => e.rank === 2) && (
-              <View style={[styles.podiumSlot, { flex: 1, alignItems: 'center' }]}>
-                <Text style={styles.medalPodium}>{RANK_MEDAL[2]}</Text>
-                <View
-                  style={[
-                    styles.podiumBlock,
-                    {
-                      height: PODIUM_HEIGHTS[2],
-                      backgroundColor: colors.card,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderBottomLeftRadius: r.sm,
-                      borderBottomRightRadius: r.sm,
-                      justifyContent: 'flex-end',
-                      paddingBottom: s.xs,
-                      marginTop: s.xxs,
-                      ...shadows.card,
-                    },
-                  ]}
-                >
-                  <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>#2</Text>
-                  <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
-                    {top3.find((e) => e.rank === 2)!.name}
-                  </Text>
-                  <Text style={[typography.label, { color: colors.competition, fontWeight: '800' }]}>
-                    {top3.find((e) => e.rank === 2)!.points.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-            )}
-            {/* #1 center */}
-            {top3.find((e) => e.rank === 1) && (
-              <View style={[styles.podiumSlot, { flex: 1, alignItems: 'center' }]}>
-                <Text style={styles.medalPodium}>{RANK_MEDAL[1]}</Text>
-                <View
-                  style={[
-                    styles.podiumBlock,
-                    {
-                      height: PODIUM_HEIGHTS[1],
-                      backgroundColor: colors.card,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderBottomLeftRadius: r.sm,
-                      borderBottomRightRadius: r.sm,
-                      justifyContent: 'flex-end',
-                      paddingBottom: s.xs,
-                      marginTop: s.xxs,
-                      ...shadows.card,
-                    },
-                  ]}
-                >
-                  <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>#1</Text>
-                  <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
-                    {top3.find((e) => e.rank === 1)!.name}
-                  </Text>
-                  <Text style={[typography.label, { color: colors.competition, fontWeight: '800' }]}>
-                    {top3.find((e) => e.rank === 1)!.points.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-            )}
-            {/* #3 right */}
-            {top3.find((e) => e.rank === 3) && (
-              <View style={[styles.podiumSlot, { flex: 1, alignItems: 'center' }]}>
-                <Text style={styles.medalPodium}>{RANK_MEDAL[3]}</Text>
-                <View
-                  style={[
-                    styles.podiumBlock,
-                    {
-                      height: PODIUM_HEIGHTS[3],
-                      backgroundColor: colors.card,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderBottomLeftRadius: r.sm,
-                      borderBottomRightRadius: r.sm,
-                      justifyContent: 'flex-end',
-                      paddingBottom: s.xs,
-                      marginTop: s.xxs,
-                      ...shadows.card,
-                    },
-                  ]}
-                >
-                  <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>#3</Text>
-                  <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
-                    {top3.find((e) => e.rank === 3)!.name}
-                  </Text>
-                  <Text style={[typography.label, { color: colors.competition, fontWeight: '800' }]}>
-                    {top3.find((e) => e.rank === 3)!.points.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
+          <LeaderboardPodium
+            top3={top3}
+            firstPlacePoints={firstPlacePoints}
+            getGapLabel={(entry) =>
+              getPodiumGapLabel(entry, firstPlacePoints, rest[0]?.points)
+            }
+          />
         )}
 
-        {/* 4. Full ranked list (rank 4+) */}
-        <View style={[styles.listHeader, { flexDirection: 'row', paddingHorizontal: s.xs, paddingVertical: s.xs, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: s.xs }]}>
-          <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', width: 32 }]}>#</Text>
+        {/* 5. Ranked list — rank, name, points, rank change (green up / red down) */}
+        <View
+          style={[
+            styles.listHeader,
+            {
+              flexDirection: 'row',
+              paddingHorizontal: s.sm,
+              paddingVertical: s.sm,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              marginBottom: 0,
+            },
+          ]}
+        >
+          <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', width: 36 }]}>#</Text>
           <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', flex: 1 }]}>
             {tab === 'teams' ? 'Team' : 'Name'}
           </Text>
-          <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', textAlign: 'right', minWidth: 56 }]}>
+          <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', textAlign: 'right', minWidth: 64 }]}>
             Pts
           </Text>
         </View>
@@ -411,17 +371,16 @@ export default function LeaderboardScreen() {
               {
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingVertical: s.xs + 2,
+                paddingVertical: s.sm,
                 paddingHorizontal: s.sm,
                 borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-                backgroundColor: item.isCurrentUser ? colors.accentMuted : colors.transparent,
-                marginBottom: 0,
+                borderBottomColor: colors.borderLight,
+                backgroundColor: item.isCurrentUser ? (colors.surfaceElevated ?? colors.card) : colors.transparent,
               },
             ]}
           >
-            <View style={{ width: 32, alignItems: 'center' }}>
-              <Text style={[typography.bodySmall, { fontWeight: '800', color: colors.textPrimary }]}>
+            <View style={{ width: 36, alignItems: 'center' }}>
+              <Text style={[typography.body, { fontWeight: '800', color: colors.textPrimary }]}>
                 #{item.rank}
               </Text>
               {item.rankChange != null && item.rankChange !== 0 && (
@@ -432,28 +391,28 @@ export default function LeaderboardScreen() {
                       fontWeight: '800',
                       fontSize: 10,
                       color: item.rankChange > 0 ? colors.success : colors.danger,
-                      marginTop: 1,
+                      marginTop: 2,
                     },
                   ]}
                 >
-                  {item.rankChange > 0 ? `▲${item.rankChange}` : `▼${Math.abs(item.rankChange)}`}
+                  {item.rankChange > 0 ? `▲ ${item.rankChange}` : `▼ ${Math.abs(item.rankChange)}`} today
                 </Text>
               )}
             </View>
-            <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: s.sm }}>
-              <Text style={[typography.body, { fontWeight: '700', color: colors.textPrimary }]} numberOfLines={1}>
+            <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: s.sm, flexWrap: 'wrap' }}>
+              <Text style={[typography.body, { fontWeight: '700', color: colors.textPrimary }]} numberOfLines={2}>
                 {item.name}
               </Text>
               {item.isCurrentUser && (
-                <View style={{ backgroundColor: colors.energy, paddingHorizontal: s.xs, paddingVertical: s.xxs, borderRadius: r.sm }}>
-                  <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700', fontSize: 10 }]}>
+                <View style={{ backgroundColor: colors.border, paddingHorizontal: s.xs, paddingVertical: s.xxs, borderRadius: r.sm }}>
+                  <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', fontSize: 10 }]}>
                     {tab === 'teams' ? 'Your Team' : 'You'}
                   </Text>
                 </View>
               )}
             </View>
-            <Text style={[typography.label, { fontWeight: '800', color: colors.energy, textAlign: 'right', minWidth: 56 }]}>
-              {item.points.toLocaleString()}
+            <Text style={[typography.title, { fontWeight: '800', color: colors.energy, textAlign: 'right', minWidth: 64, fontSize: 18 }]}>
+              {item.points.toLocaleString()} pts
             </Text>
           </View>
         ))}
@@ -468,14 +427,9 @@ const styles = StyleSheet.create({
   scrollContent: {},
   roundHeader: {},
   roundHeaderRow: {},
-  roundTotal: {},
   segmentWrap: {},
-  segmentBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  segmentBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   insightStrip: {},
-  podiumRow: {},
-  podiumSlot: {},
-  podiumBlock: { width: '100%', alignItems: 'center' },
-  medalPodium: { fontSize: 28, marginTop: 4 },
   listHeader: {},
   listRow: {},
 });

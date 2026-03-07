@@ -28,10 +28,10 @@ export const lightPalette = {
   /** Chart inactive bar / track (charts use energy for active) */
   chartInactive: '#CBD5F5',
 
-  /** Podium / leaderboard */
-  gold: '#F59E0B',
-  silver: '#94A3B8',
-  bronze: '#B45309',
+  /** Podium / leaderboard medals */
+  gold: '#FFD700',
+  silver: '#C0C0C0',
+  bronze: '#CD7F32',
 } as const;
 
 export const darkPalette = {
@@ -58,9 +58,10 @@ export const darkPalette = {
 
   chartInactive: '#475569',
 
-  gold: '#F59E0B',
-  silver: '#94A3B8',
-  bronze: '#B45309',
+  /** Podium / leaderboard medals (same as light for clarity) */
+  gold: '#FFD700',
+  silver: '#C0C0C0',
+  bronze: '#CD7F32',
 } as const;
 
 /** Re-export for direct use (e.g. non-themed code). Prefer theme.colors in UI. */

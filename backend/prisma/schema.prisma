@@ -15,11 +15,12 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  ClubMemberships ClubMembership[]
-  TeamMemberships TeamMembership[]
-  Workouts        Workout[]
-  ScoreLedgers    ScoreLedger[]
-  PushTokens      PushToken[]
+  ClubMemberships   ClubMembership[]
+  TeamMemberships   TeamMembership[]
+  TeamsCreated      Team[]           @relation("TeamCreatedBy")
+  Workouts          Workout[]
+  ScoreLedgers      ScoreLedger[]
+  PushTokens        PushToken[]
 
   @@index([email])
 }
@@ -60,7 +61,7 @@ enum ClubRole {
 enum RoundStatus {
   draft
   active
-  ended
+  completed
   @@map("round_status")
 }
 
@@ -81,6 +82,7 @@ model ClubMembership {
   @@index([clubId])
 }
 
+// One club → one active round. DB: partial unique index Round_clubId_status_active_key on (clubId) WHERE status = 'active'.
 model Round {
   id              String      @id @default(uuid())
   clubId          String
@@ -109,53 +111,60 @@ model Team {
   id        String   @id @default(uuid())
   roundId   String
   name      String
+  createdBy String?
   createdAt DateTime @default(now())
 
-  Round       Round            @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  Memberships TeamMembership[]
+  Round        Round            @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  CreatedByUser User?           @relation("TeamCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  Memberships  TeamMembership[]
+  ScoreLedgers ScoreLedger[]
 
   @@index([roundId])
+  @@index([createdBy])
 }
 
-// Business rules (enforced in DB + TeamService):
-// - A user can be in multiple clubs and, within a club, in multiple teams across different rounds.
-// - A user can be in only ONE team per club per round (enforced by @@unique([userId, roundId])).
-// - Historically a user may have been on different teams in the same club (different rounds).
+// One user → one team per round. DB: unique index TeamMembership_userId_roundId_key on (userId, roundId).
 model TeamMembership {
   id        String   @id @default(uuid())
   userId    String
   teamId    String
   roundId   String
+  joinedAt  DateTime @default(now())
+  isLeader  Boolean  @default(false)
 
   User  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   Team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   Round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
   @@unique([userId, teamId])
-  @@unique([userId, roundId]) // One team per user per round (per club, since round belongs to club).
+  @@unique([userId, roundId]) // unique(roundId, userId) — one team per user per round
   @@index([userId])
   @@index([teamId])
   @@index([roundId])
 }
 
 model Workout {
-  id             String   @id @default(uuid())
-  userId         String
-  roundId        String
-  activityType   String
-  durationMinutes Int?
-  distanceKm     Float?
-  proofUrl       String?
-  loggedAt       DateTime
-  createdAt      DateTime @default(now())
+  id               String   @id @default(uuid())
+  userId           String
+  roundId          String
+  activityType     String
+  workoutMasterId Int?
+  durationMinutes  Int?
+  distanceKm       Float?
+  proofUrl         String?
+  notes            String?
+  loggedAt         DateTime
+  createdAt        DateTime @default(now())
 
-  User         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Round        Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  ScoreLedger  ScoreLedger?
+  User          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Round         Round         @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  WorkoutMaster WorkoutMaster? @relation(fields: [workoutMasterId], references: [id], onDelete: SetNull)
+  ScoreLedger   ScoreLedger?
 
   @@index([userId])
   @@index([roundId])
   @@index([loggedAt])
+  @@index([workoutMasterId])
 }
 
 model ScoreLedger {
@@ -163,6 +172,8 @@ model ScoreLedger {
   workoutId            String   @unique
   userId               String
   roundId              String
+  teamId               String?
+  reasonType           String   @default("workout") // workout | adjustment | admin_override
   rawPoints            Float
   cappedPoints         Float
   dailyAdjustedPoints  Float
@@ -173,10 +184,79 @@ model ScoreLedger {
   Workout Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   User    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   Round   Round   @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  Team    Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([roundId])
+  @@index([teamId])
   @@index([createdAt])
+}
+
+// Precomputed stats per user per round (FITCLUB_MASTER_SPEC §5.10). Updated on workout write.
+model UserStats {
+  id            String   @id @default(uuid())
+  userId        String
+  clubId        String
+  roundId       String
+  totalPoints   Float    @default(0)
+  totalWorkouts Int      @default(0)
+  totalCalories Float    @default(0)
+  streakDays    Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, clubId, roundId])
+  @@index([userId])
+  @@index([roundId])
+  @@index([clubId])
+  @@map("user_stats")
+}
+
+// Precomputed stats per team per round (FITCLUB_MASTER_SPEC §5.11). Updated on workout write.
+model TeamStats {
+  id          String   @id @default(uuid())
+  teamId      String
+  clubId      String
+  roundId     String
+  totalPoints Float    @default(0)
+  totalWorkouts Int    @default(0)
+  memberCount Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([teamId, roundId])
+  @@index([teamId])
+  @@index([roundId])
+  @@index([clubId])
+  @@map("team_stats")
+}
+
+// Activity feed for club (FITCLUB_MASTER_SPEC §5.12). Scaffold for V2.
+model ActivityFeed {
+  id           String   @id @default(uuid())
+  clubId       String
+  actorUserId  String
+  type         String   // WORKOUT_LOGGED, STREAK_REACHED, ROUND_STARTED, TEAM_JOINED, TEAM_CREATED, MILESTONE_REACHED
+  metadataJson String?  // JSON payload
+  createdAt    DateTime @default(now())
+
+  @@index([clubId])
+  @@index([createdAt])
+  @@map("activity_feed")
+}
+
+// In-app notifications (FITCLUB_MASTER_SPEC §5.13).
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  clubId    String?
+  type      String
+  title     String
+  body      String
+  isRead    Boolean   @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
 }
 
 // Reference data: generic workout types with MET/scoring parameters
@@ -201,6 +281,7 @@ model WorkoutMaster {
   workoutType        String            @unique
   genericWorkoutType String
   genericWorkout     GenericWorkoutMet @relation(fields: [genericWorkoutType], references: [workoutType])
+  workouts           Workout[]
 
   @@map("WorkoutMaster")
 }

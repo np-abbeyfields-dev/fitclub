@@ -106,7 +106,7 @@ export class RoundController {
       return;
     }
     const round = await RoundService.endRound(roundId, userId);
-    res.json({ success: true, data: round, message: 'Round ended.' } as ApiResponse);
+    res.json({ success: true, data: round, message: 'Round completed.' } as ApiResponse);
   }
 
   static async getLeaderboard(req: AuthRequest, res: Response): Promise<void> {
@@ -118,6 +118,18 @@ export class RoundController {
     }
     const type = (req.query?.type === 'teams' ? 'teams' : 'individuals') as 'individuals' | 'teams';
     const data = await LeaderboardService.getLeaderboard(roundId, userId, type);
+    res.json({ success: true, data } as ApiResponse);
+  }
+
+  /** GET /rounds/:roundId/summary — round wrap-up / summary (Phase 4). */
+  static async getRoundSummary(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const roundId = param(req, 'roundId');
+    if (!roundId) {
+      res.status(400).json({ success: false, error: 'Round ID required.' } as ApiResponse);
+      return;
+    }
+    const data = await RoundService.getRoundSummary(roundId, userId);
     res.json({ success: true, data } as ApiResponse);
   }
 

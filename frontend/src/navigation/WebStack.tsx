@@ -10,6 +10,7 @@ import TeamScreen from '../screens/TeamScreen';
 import TeamsManagementScreen from '../screens/TeamsManagementScreen';
 import MembersScreen from '../screens/MembersScreen';
 import RoundsScreen from '../screens/RoundsScreen';
+import RoundConfigScreen from '../screens/RoundConfigScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import WorkoutNewScreen from '../screens/WorkoutNewScreen';
@@ -34,6 +35,7 @@ export const WebStack = React.forwardRef<
       <Stack.Screen name="Teams" component={TeamsManagementScreen} />
       <Stack.Screen name="Members" component={MembersScreen} />
       <Stack.Screen name="Rounds" component={RoundsScreen} />
+      <Stack.Screen name="RoundConfig" component={RoundConfigScreen} />
       <Stack.Screen name="Analytics" component={AnalyticsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="WorkoutNew" component={WorkoutNewScreen} />

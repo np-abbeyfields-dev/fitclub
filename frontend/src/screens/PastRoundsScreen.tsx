@@ -42,9 +42,9 @@ export default function PastRoundsScreen() {
     }
     try {
       const res = await roundService.listByClub(selectedClub.id);
-      const ended = (res.data ?? []).filter((round) => round.status === 'ended').slice(0, 20);
+      const completed = (res.data ?? []).filter((round) => round.status === 'completed').slice(0, 20);
       const withSummary: PastRoundRow[] = [];
-      for (const round of ended) {
+      for (const round of completed) {
         try {
           const lb = await roundService.getLeaderboard(round.id, 'teams');
           const list = (lb.data ?? []) as LeaderboardEntry[];
@@ -82,7 +82,7 @@ export default function PastRoundsScreen() {
   }, [load]);
 
   const openRound = (roundId: string, roundName: string) => {
-    (navigation as any).navigate('RoundLeaderboard', { roundId, roundName });
+    (navigation as any).navigate('RoundSummary', { roundId, roundName });
   };
 
   const goBack = () => (navigation as any).goBack();
@@ -161,16 +161,16 @@ export default function PastRoundsScreen() {
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: s.sm, marginTop: 4 }}>
                 {row.winnerName && (
-                  <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>
+                  <Text style={[typography.caption, { color: colors.competition, fontWeight: '700' }]}>
                     Won by {row.winnerName}
                   </Text>
                 )}
                 {row.myRank != null && (
-                  <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
+                  <Text style={[typography.caption, { color: colors.competition, fontWeight: '600' }]}>
                     Your rank #{row.myRank}
                   </Text>
                 )}
-                <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
+                <Text style={[typography.caption, { color: colors.energy, fontWeight: '600' }]}>
                   {row.totalPoints.toLocaleString()} pts total
                 </Text>
               </View>

@@ -10,7 +10,7 @@ import {
   UIManager,
   Platform,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -18,12 +18,12 @@ import { useClub } from '../context/ClubContext';
 import { roundService } from '../services/roundService';
 import type { LeaderboardEntry, LeaderboardTab } from '../types/leaderboard';
 import type { RootStackParamList } from '../navigation/types';
+import { RANK_MEDAL } from '../constants/rank';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const RANK_MEDAL: Record<1 | 2 | 3, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 const PODIUM_HEIGHTS = { 1: 88, 2: 72, 3: 72 } as const;
 
 export default function RoundLeaderboardScreen() {
@@ -32,7 +32,7 @@ export default function RoundLeaderboardScreen() {
   const insets = useSafeAreaInsets();
   const route = useRoute<RouteProp<RootStackParamList, 'RoundLeaderboard'>>();
   const { roundId, roundName } = route.params;
-  const { colors, spacing: s, radius: r, typography, shadows } = theme;
+  const { colors, spacing: s, radius: r, typography, shadows, isDark } = theme;
   const { selectedClub } = useClub();
 
   const [tab, setTab] = useState<LeaderboardTab>('teams');
@@ -83,6 +83,12 @@ export default function RoundLeaderboardScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const data = tab === 'individuals' ? individuals : teams;
   const myEntry = data.find((e) => e.isCurrentUser) ?? null;
@@ -143,7 +149,7 @@ export default function RoundLeaderboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {/* Insight strip */}
+        {/* Insight strip — dark surface only, high-contrast text, gold icon when #1 */}
         {myEntry && (
           <View
             style={[
@@ -152,12 +158,12 @@ export default function RoundLeaderboardScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: myEntry.rank === 1 ? colors.accentMuted : colors.statCardBackground,
+                backgroundColor: isDark ? colors.surface : (colors.surfaceElevated ?? colors.card),
                 borderWidth: 1,
-                borderColor: myEntry.rank === 1 ? colors.energy : colors.border,
+                borderColor: colors.border,
                 borderRadius: r.md,
-                paddingVertical: s.xs,
-                paddingHorizontal: s.sm,
+                paddingVertical: s.sm,
+                paddingHorizontal: s.md,
                 marginTop: s.sm,
                 marginBottom: s.sm,
               },
@@ -165,13 +171,15 @@ export default function RoundLeaderboardScreen() {
           >
             {myEntry.rank === 1 ? (
               <>
-                <Ionicons name="trophy" size={16} color={colors.energy} />
-                <Text style={[typography.label, { color: colors.textPrimary, fontWeight: '800', marginLeft: s.sm }]}>You were #1</Text>
+                <Ionicons name="trophy" size={20} color={colors.gold} />
+                <Text style={[typography.body, { color: colors.textPrimary, fontWeight: '700', marginLeft: s.sm, fontSize: 15 }]}>
+                  You were #1
+                </Text>
               </>
             ) : (
               <>
-                <Ionicons name="trophy-outline" size={14} color={colors.primary} />
-                <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '700', marginLeft: s.xxs }]}>
+                <Ionicons name="trophy-outline" size={18} color={colors.textSecondary} />
+                <Text style={[typography.body, { color: colors.textPrimary, fontWeight: '700', marginLeft: s.sm, fontSize: 15 }]}>
                   {gapToFirst.toLocaleString()} pts behind #1
                 </Text>
               </>
@@ -225,9 +233,16 @@ export default function RoundLeaderboardScreen() {
                       },
                     ]}
                   >
-                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>#{rank}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.xxs }}>
+                      <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>#{rank}</Text>
+                      {entry.rankChange != null && entry.rankChange !== 0 && (
+                        <Text style={[typography.caption, { fontSize: 10, fontWeight: '800', color: entry.rankChange > 0 ? colors.success : colors.danger }]}>
+                          {entry.rankChange > 0 ? `▲${entry.rankChange}` : `▼${Math.abs(entry.rankChange)}`}
+                        </Text>
+                      )}
+                    </View>
                     <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>{entry.name}</Text>
-                    <Text style={[typography.label, { color: colors.competition, fontWeight: '800' }]}>{entry.points.toLocaleString()}</Text>
+                    <Text style={[typography.label, { color: rank === 1 ? colors.gold : rank === 2 ? colors.silver : colors.bronze, fontWeight: '800' }]}>{entry.points.toLocaleString()}</Text>
                   </View>
                 </View>
               );

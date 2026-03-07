@@ -55,7 +55,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
   };
 
   const onFABPress = () => {
-    navigation.getParent()?.navigate('HomeTab', { screen: 'WorkoutNew' });
+    navigation.getParent()?.navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'WorkoutNew' } });
   };
 
   const tabBarHeight = 64 + insets.bottom;
@@ -95,7 +95,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           style={[
             styles.tabInner,
             {
-              backgroundColor: 'transparent',
+              backgroundColor: colors.transparent,
               borderRadius: r.sm,
               paddingVertical: 6,
               paddingHorizontal: 10,
@@ -177,7 +177,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                 },
               ]}
             >
-              <Ionicons name="add" size={30} color="#FFFFFF" />
+              <Ionicons name="add" size={30} color={colors.textInverse} />
             </Animated.View>
           </TouchableOpacity>
           <Text style={[styles.fabLabel, { color: colors.textSecondary, fontWeight: '700' }]}>Log</Text>

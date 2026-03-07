@@ -2,6 +2,18 @@ import prisma from '../config/database';
 import { AuthorizationError, NotFoundError, ValidationError } from '../utils/errors';
 import { ClubService } from './club.service';
 
+/** Enforce unique(roundId, userId): one team per user per round. DB enforces via TeamMembership_userId_roundId_key. */
+async function ensureOneTeamPerUserPerRound(roundId: string, userId: string): Promise<void> {
+  const existing = await prisma.teamMembership.findUnique({
+    where: { userId_roundId: { userId, roundId } },
+  });
+  if (existing) {
+    throw new ValidationError(
+      'This user is already on a team for this round. A user can only be in one team per round.'
+    );
+  }
+}
+
 export class TeamService {
   /** Any club member when round is active. Create a team. */
   static async createTeam(roundId: string, userId: string, name: string) {
@@ -12,9 +24,17 @@ export class TeamService {
       throw new ValidationError('Teams can only be created when the round is active.');
     }
     const team = await prisma.team.create({
-      data: { roundId, name: name.trim() },
-      include: { Round: { select: { id: true, name: true, status: true } } },
+      data: { roundId, name: name.trim(), createdBy: userId },
+      include: { Round: { select: { id: true, name: true, status: true, clubId: true } } },
     });
+    await prisma.activityFeed.create({
+      data: {
+        clubId: team.Round.clubId,
+        actorUserId: userId,
+        type: 'TEAM_CREATED',
+        metadataJson: JSON.stringify({ teamId: team.id, teamName: team.name, roundId }),
+      },
+    }).catch(() => {});
     return team;
   }
 
@@ -67,20 +87,24 @@ export class TeamService {
       throw new ValidationError('User is not a member of this club.');
     }
 
-    // One team per user per round (user may be in different teams in other rounds).
-    const existingInRound = await prisma.teamMembership.findUnique({
-      where: { userId_roundId: { userId: userIdToAdd, roundId } },
-    });
-    if (existingInRound) {
-      throw new ValidationError(
-        'This user is already on a team for this round. A user can only be in one team per round.'
-      );
-    }
+    await ensureOneTeamPerUserPerRound(roundId, userIdToAdd);
 
     const membership = await prisma.teamMembership.create({
       data: { userId: userIdToAdd, teamId, roundId },
       include: { User: { select: { id: true, displayName: true, email: true } }, Team: true },
     });
+    await prisma.activityFeed.create({
+      data: {
+        clubId: round.clubId,
+        actorUserId: userIdToAdd,
+        type: 'TEAM_JOINED',
+        metadataJson: JSON.stringify({
+          teamId,
+          teamName: membership.Team.name,
+          roundId,
+        }),
+      },
+    }).catch(() => {});
     return membership;
   }
 

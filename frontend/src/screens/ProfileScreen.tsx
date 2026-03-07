@@ -6,8 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Modal,
-  Pressable,
   Switch,
   ActivityIndicator,
 } from 'react-native';
@@ -20,7 +18,6 @@ import { useDashboardStore } from '../store/dashboardStore';
 import { useNotificationsStore } from '../store/notificationsStore';
 import { roundService } from '../services/roundService';
 import type { LeaderboardEntry } from '../types/leaderboard';
-import { spacing as tokenSpacing } from '../theme/tokens';
 
 const AVATAR_SIZE = 64;
 
@@ -94,14 +91,16 @@ export default function ProfileScreen() {
   const { colors, spacing, radius, typography } = theme;
 
   const [refreshing, setRefreshing] = useState(false);
-  const [clubPickerOpen, setClubPickerOpen] = useState(false);
   const [pastRounds, setPastRounds] = useState<PastRoundRow[]>([]);
   const [pastRoundsLoading, setPastRoundsLoading] = useState(false);
 
-  const dashboard = selectedClub ? useDashboardStore((s) => s.getDashboardForClub(selectedClub.id)) : null;
+  const dashboard = useDashboardStore((s) =>
+    selectedClub ? s.getDashboardForClub(selectedClub.id) : null
+  );
   const activeRoundName = dashboard?.round?.id && dashboard.round.name !== 'No active round' ? dashboard.round.name : null;
   const workoutCount = dashboard?.workoutCount ?? 0;
 
+  const clubId = selectedClub?.id ?? null;
   const loadPastRounds = useCallback(async () => {
     if (!selectedClub) {
       setPastRounds([]);
@@ -110,9 +109,9 @@ export default function ProfileScreen() {
     setPastRoundsLoading(true);
     try {
       const res = await roundService.listByClub(selectedClub.id);
-      const ended = (res.data ?? []).filter((r) => r.status === 'ended').slice(0, 8);
+      const completed = (res.data ?? []).filter((r) => r.status === 'completed').slice(0, 8);
       const rows: PastRoundRow[] = [];
-      for (const round of ended) {
+      for (const round of completed) {
         try {
           const lb = await roundService.getLeaderboard(round.id, 'teams');
           const list = (lb.data ?? []) as LeaderboardEntry[];
@@ -133,7 +132,7 @@ export default function ProfileScreen() {
     } finally {
       setPastRoundsLoading(false);
     }
-  }, [selectedClub?.id]);
+  }, [clubId]);
 
   useEffect(() => {
     hydrateNotifications();
@@ -170,128 +169,128 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {/* 1. Identity */}
+        {/* 1. Identity — Avatar, Name, Email, Workouts this round */}
         <SectionHeader title="Identity" style={{ marginBottom: spacing.xs }} />
-        <View style={[styles.identityCard, { padding: spacing.sm, marginBottom: spacing.md, backgroundColor: colors.primaryMuted, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, ...theme.shadows.sm }]}>
-          <View style={[styles.avatarWrap, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2, backgroundColor: colors.primaryMuted, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }]}>
+        <View style={[styles.identityCard, { flexDirection: 'row', alignItems: 'center', padding: spacing.md, marginBottom: spacing.md, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, ...theme.shadows.sm }]}>
+          <View style={[styles.avatarWrap, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2, backgroundColor: colors.primaryMuted, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md }]}>
             <Text style={[typography.h2, { color: colors.primary, fontWeight: '800' }]}>{initial}</Text>
           </View>
-          <Text style={[typography.h3, { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
-            {user?.displayName || 'Member'}
-          </Text>
-          <Text style={[typography.bodySmall, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={1}>
-            {user?.email}
-          </Text>
-          {selectedClub && (
-            <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.xs, fontWeight: '600' }]}>
-              {workoutCount} workout{workoutCount === 1 ? '' : 's'} this round
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[typography.title, { color: colors.text, fontWeight: '700', fontSize: 18 }]} numberOfLines={1}>
+              {user?.displayName || 'Member'}
             </Text>
-          )}
+            <Text style={[typography.bodySmall, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={1}>
+              {user?.email}
+            </Text>
+            {selectedClub && (
+              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.xs, fontWeight: '600' }]}>
+                {workoutCount} workout{workoutCount === 1 ? '' : 's'} this round
+              </Text>
+            )}
+          </View>
         </View>
 
-        {/* 2. My Clubs */}
+        {/* 2. My Clubs — entire card clickable; active = ✓ Active + blue border; role in card; gear only for admin */}
         <SectionHeader title="My Clubs" style={{ marginBottom: spacing.xs }} />
-        {clubs.length === 0 ? (
-          <View style={[styles.clubActions, { gap: spacing.xs, marginBottom: spacing.md }]}>
+        {(clubs ?? []).length === 0 ? (
+          <View style={[styles.clubActions, { gap: spacing.sm, marginBottom: spacing.md }]}>
             <TouchableOpacity
-              style={[styles.outlineBtn, { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border }]}
-              onPress={() => (navigation as any).getParent()?.navigate('HomeTab', { screen: 'JoinClub' })}
+              style={[styles.outlineBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border }]}
+              onPress={() => (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'JoinClub' } })}
               activeOpacity={0.7}
             >
+              <Ionicons name="add" size={20} color={colors.primary} />
               <Text style={[typography.label, { color: colors.primary }]}>Join club</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.primaryBtn, { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.sm, backgroundColor: colors.primary }]}
-              onPress={() => (navigation as any).getParent()?.navigate('HomeTab', { screen: 'CreateClub' })}
+              style={[styles.primaryBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.sm, backgroundColor: colors.primary }]}
+              onPress={() => (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'CreateClub' } })}
               activeOpacity={0.7}
             >
+              <Ionicons name="add" size={20} color={colors.textInverse} />
               <Text style={[typography.label, { color: colors.textInverse, fontWeight: '700' }]}>Create club</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
-            <View style={{ marginBottom: spacing.xs }}>
-              {clubs.map((club) => {
+            <View style={{ marginBottom: spacing.sm }}>
+              {(clubs ?? []).map((club) => {
                 const isActive = selectedClub?.id === club.id;
-                const roundLabel = isActive && activeRoundName ? activeRoundName : (isActive ? 'No active round' : '—');
+                const roundLabel = isActive && activeRoundName ? activeRoundName : isActive ? 'No active round' : '—';
+                const roleLabel = club.role === 'admin' ? 'Admin 👑' : club.role === 'team_lead' ? 'Team Lead' : 'Member';
                 return (
                   <TouchableOpacity
                     key={club.id}
-                    onPress={() => (isActive ? setClubPickerOpen(true) : setSelectedClub(club))}
+                    onPress={() => setSelectedClub(club)}
                     style={[
                       styles.clubRow,
                       {
                         flexDirection: 'row',
-                        alignItems: 'center',
+                        alignItems: 'flex-start',
                         justifyContent: 'space-between',
                         paddingVertical: spacing.sm,
-                        paddingHorizontal: spacing.sm,
-                        backgroundColor: colors.surface,
-                        borderRadius: radius.sm,
-                        borderWidth: 1,
+                        paddingHorizontal: spacing.md,
+                        backgroundColor: colors.card,
+                        borderRadius: radius.md,
+                        borderWidth: 2,
                         borderColor: isActive ? colors.primary : colors.border,
                         marginBottom: spacing.xs,
+                        ...theme.shadows.sm,
                       },
                     ]}
                     activeOpacity={0.7}
                   >
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                        <Text style={[typography.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
+                        <Text style={[typography.section, { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
                           {club.name}
                         </Text>
                         {isActive && (
-                          <View style={{ backgroundColor: colors.success, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm }}>
-                            <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700', fontSize: 10 }]}>Active</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primaryMuted, paddingHorizontal: spacing.xs, paddingVertical: 2, borderRadius: radius.sm }}>
+                            <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
+                            <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', fontSize: 11 }]}>Active</Text>
                           </View>
                         )}
                       </View>
-                      <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
+                      <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 4 }]} numberOfLines={1}>
                         {roundLabel}
                       </Text>
-                      {club.role === 'admin' ? (
-                        <View style={{ backgroundColor: colors.competition, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm, alignSelf: 'flex-start' }}>
-                          <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700', fontSize: 10 }]}>Admin</Text>
-                        </View>
-                      ) : (
-                        <Text style={[typography.caption, { color: colors.mutedText, fontWeight: '600' }]}>
-                          {club.role === 'team_lead' ? 'Team Lead' : 'Member'}
-                        </Text>
-                      )}
+                      <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2, fontWeight: '600' }]}>
+                        {roleLabel}
+                      </Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                      <TouchableOpacity onPress={() => setClubPickerOpen(true)} style={{ padding: spacing.xs }}>
-                        <Ionicons name="swap-horizontal-outline" size={18} color={colors.textSecondary} />
+                    {club.role === 'admin' && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setSelectedClub(club);
+                          (navigation as any).getParent()?.navigate('ClubInfo');
+                        }}
+                        style={{ padding: spacing.xs, marginTop: -spacing.xs, marginRight: -spacing.xs }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
                       </TouchableOpacity>
-                      {club.role === 'admin' && (
-                        <TouchableOpacity
-                          onPress={() => {
-                            setSelectedClub(club);
-                            (navigation as any).getParent()?.navigate('Rounds');
-                          }}
-                          style={{ padding: spacing.xs }}
-                        >
-                          <Ionicons name="settings-outline" size={18} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                    )}
                   </TouchableOpacity>
                 );
               })}
             </View>
-            <View style={[styles.clubActions, { flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.md }]}>
+            <View style={[styles.clubActions, { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }]}>
               <TouchableOpacity
-                style={[styles.outlineBtn, { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border }]}
-                onPress={() => (navigation as any).getParent()?.navigate('HomeTab', { screen: 'JoinClub' })}
+                style={[styles.outlineBtn, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border }]}
+                onPress={() => (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'JoinClub' } })}
                 activeOpacity={0.7}
               >
+                <Ionicons name="add" size={20} color={colors.primary} />
                 <Text style={[typography.label, { color: colors.primary }]}>Join club</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.primaryBtn, { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.primary }]}
-                onPress={() => (navigation as any).getParent()?.navigate('HomeTab', { screen: 'CreateClub' })}
+                style={[styles.primaryBtn, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.primary }]}
+                onPress={() => (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'CreateClub' } })}
                 activeOpacity={0.7}
               >
+                <Ionicons name="add" size={20} color={colors.textInverse} />
                 <Text style={[typography.label, { color: colors.textInverse, fontWeight: '700' }]}>Create club</Text>
               </TouchableOpacity>
             </View>
@@ -303,10 +302,10 @@ export default function ProfileScreen() {
           <>
             <SectionHeader title="Admin tools" style={{ marginBottom: spacing.xs }} />
             <View style={{ gap: spacing.xs, marginBottom: spacing.md }}>
-              <Row label="Create challenge" onPress={() => (navigation as any).getParent()?.navigate('Rounds')} right={<Ionicons name="chevron-forward" size={18} color={colors.textMuted} />} />
-              <Row label="Manage members" onPress={() => (navigation as any).getParent()?.navigate('Members')} right={<Ionicons name="chevron-forward" size={18} color={colors.textMuted} />} />
-              <Row label="Manage teams" onPress={() => (navigation as any).getParent()?.navigate('TeamsManagement')} right={<Ionicons name="chevron-forward" size={18} color={colors.textMuted} />} />
-              <Row label="Edit club info" onPress={() => (navigation as any).getParent()?.navigate('ClubInfo')} right={<Ionicons name="chevron-forward" size={18} color={colors.textMuted} />} />
+              <Row label="Create challenge" onPress={() => (navigation as any).getParent()?.navigate('Rounds')} />
+              <Row label="Manage members" onPress={() => (navigation as any).getParent()?.navigate('Members')} />
+              <Row label="Manage teams" onPress={() => (navigation as any).getParent()?.navigate('TeamsManagement')} />
+              <Row label="Edit club info" onPress={() => (navigation as any).getParent()?.navigate('ClubInfo')} />
             </View>
           </>
         )}
@@ -326,7 +325,7 @@ export default function ProfileScreen() {
             {pastRounds.map((row) => (
               <TouchableOpacity
                 key={row.roundId}
-                onPress={() => (navigation as any).getParent()?.navigate('RoundLeaderboard', { roundId: row.roundId, roundName: row.roundName })}
+                onPress={() => (navigation as any).getParent()?.navigate('RoundSummary', { roundId: row.roundId, roundName: row.roundName })}
                 style={[
                   styles.row,
                   {
@@ -346,11 +345,10 @@ export default function ProfileScreen() {
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={[typography.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>{row.roundName}</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: 2 }}>
-                    {row.myRank != null && <Text style={[typography.caption, { color: colors.textSecondary }]}>Rank #{row.myRank}</Text>}
-                    {row.teamName && <Text style={[typography.caption, { color: colors.textMuted }]} numberOfLines={1}>Team: {row.teamName}</Text>}
+                    {row.myRank != null && <Text style={[typography.caption, { color: colors.competition, fontWeight: '600' }]}>Rank #{row.myRank}</Text>}
+                    {row.teamName && <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>Team: {row.teamName}</Text>}
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             ))}
             <TouchableOpacity
@@ -386,31 +384,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      <Modal visible={clubPickerOpen} transparent animationType="fade">
-        <Pressable style={[styles.modalOverlay, { backgroundColor: colors.overlay ?? 'rgba(0,0,0,0.5)', padding: tokenSpacing.lg }]} onPress={() => setClubPickerOpen(false)}>
-          <View style={[styles.picker, { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.sm }]}>
-            {clubs.map((club) => (
-              <TouchableOpacity
-                key={club.id}
-                style={[styles.pickerItem, { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.sm, backgroundColor: selectedClub?.id === club.id ? colors.primaryMuted : 'transparent' }]}
-                onPress={() => {
-                  setSelectedClub(club);
-                  setClubPickerOpen(false);
-                }}
-              >
-                <Text style={[typography.body, { color: colors.text }]} numberOfLines={1}>{club.name}</Text>
-                {club.role === 'admin' ? (
-                  <View style={{ backgroundColor: theme.colors.competition, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm, alignSelf: 'flex-start' }}>
-                    <Text style={[typography.caption, { color: theme.colors.textInverse, fontWeight: '700', fontSize: 10 }]}>Admin</Text>
-                  </View>
-                ) : (
-                  <Text style={[typography.caption, { color: colors.textSecondary }]}>{club.role === 'team_lead' ? 'Team Lead' : 'Member'}</Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -429,7 +402,4 @@ const styles = StyleSheet.create({
   outlineBtn: { alignItems: 'center', justifyContent: 'center' },
   primaryBtn: { alignItems: 'center', justifyContent: 'center' },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  modalOverlay: { flex: 1, justifyContent: 'center' },
-  picker: { maxHeight: 320 },
-  pickerItem: {},
 });

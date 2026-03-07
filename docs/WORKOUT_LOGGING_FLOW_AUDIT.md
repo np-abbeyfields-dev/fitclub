@@ -1,123 +1,126 @@
 # Workout Logging Flow Audit vs FITCLUB_MASTER_SPEC.md
 
-**Date:** 2025-03-05  
-**Source of truth:** FITCLUB_MASTER_SPEC.md (sections 4.5, 5.8, 5.9, 6.3, 6.4, 6.5, 18, 20)
+**Date:** 2025-03-05 (updated)  
+**Source of truth:** FITCLUB_MASTER_SPEC.md (§4.5, §5.8, §5.9, §6.3, §6.4, §6.5)
+
+This audit verifies the workout logging flow against the spec for:
+- correct round detection
+- points ledger insertion
+- stats aggregation update
+- leaderboard cache update
 
 ---
 
-## Spec Requirements (Summary)
+## Spec Reference (§6.3 Workout logging flow)
 
-From **§6.3 Workout logging flow**, when a user logs a workout:
+When a user logs a workout:
 
-1. Validate request
-2. Validate user belongs to club
-3. Validate there is an active round for that club
-4. Validate workout type / inputs
-5. Calculate points
-6. Create workout row
-7. Create points ledger row
-8. Update UserStats
-9. Update TeamStats
-10. Update Redis leaderboard sorted sets
-11. Optionally create ActivityFeed event
-12. Return updated totals to client
+1. Validate request  
+2. Validate user belongs to club  
+3. Validate there is an active round for that club  
+4. Validate workout type / inputs  
+5. Calculate points  
+6. Create workout row  
+7. Create points ledger row  
+8. Update UserStats  
+9. Update TeamStats  
+10. Update Redis leaderboard sorted sets  
+11. Optionally create ActivityFeed event  
+12. Return updated totals to client  
 
-From **§4.5 Workout rules** and **§5.9 PointsLedger**:
-
-- Workouts create points; points persisted and immutable after logging.
-- Leaderboards must **not** be recalculated from raw workouts every request.
-- **PointsLedger (ScoreLedger) is the scoring source of truth.**
-
-From **§6.5 Aggregation strategy**:
-
-- Maintain `user_stats` and `team_stats`; update on workout write.
-
-From **§6.4 Leaderboard strategy**:
-
-- Use Redis sorted sets for fast rank lookups; update on score updates.
+§4.5 / §5.9: PointsLedger (ScoreLedger) is the scoring source of truth; do not compute leaderboard from raw workouts.  
+§6.5: user_stats and team_stats update on workout write.
 
 ---
 
-## 1. Round Detection
+## 1. Round detection
 
-| Requirement | Status | Notes |
-|-------------|--------|--------|
-| Validate round exists | ✅ **Implemented** | `logWorkout()` loads round by `roundId`; throws NotFoundError if missing. |
-| Validate round belongs to club | ✅ **Implemented** | Round has `clubId`; membership check is per club via `ClubService.ensureMember(userId, round.clubId)`. |
-| Validate user is club member | ✅ **Implemented** | `ClubService.ensureMember(userId, round.clubId)` before any write. |
-| Validate round status = active | ✅ **Implemented** | `logWorkout()` throws if `round.status !== 'active'`. |
-| One active round per club (spec §4.2) | ✅ **Enforced** | Round model has `status`; activation logic in `RoundService.activateRound` ensures single active round (via application logic; consider partial unique index in DB). |
+| Requirement | Status | Implementation |
+|-------------|--------|----------------|
+| Round exists | ✅ | `workout.service.logWorkout()` loads round by `roundId`; throws `NotFoundError` if missing. |
+| Round is active | ✅ | `if (round.status !== 'active') throw new ValidationError('Workouts can only be logged for an active round.')` |
+| User belongs to club | ✅ | `ClubService.ensureMember(userId, round.clubId)` before any write. |
+| Round belongs to club | ✅ | Round is fetched by `roundId`; membership check uses `round.clubId`, so round and club are consistent. |
 
-**Conclusion:** Round detection is implemented in `workout.service.logWorkout()`: load round by `roundId`, ensure `round.status === 'active'`, ensure `ClubService.ensureMember(userId, round.clubId)`.
+**Frontend:** `WorkoutNewScreen` gets `activeRoundId` from `clubService.getDashboard(selectedClub.id)` → `dash.data?.activeRound?.id`, then calls `workoutService.logWorkout(activeRoundId!, payload)`. So the client sends the club’s active round ID; the backend re-validates existence and status.
 
----
-
-## 2. Points Ledger Insertion
-
-| Requirement | Status | Notes |
-|-------------|--------|--------|
-| Create Workout row | ❌ **Missing** | No code path creates `Workout` in backend. |
-| Create PointsLedger/ScoreLedger row | ❌ **Missing** | No code path creates `ScoreLedger`. |
-| Points immutable after logging (§4.5) | N/A | No write path exists. |
-| Ledger as source of truth (§5.9) | ✅ **Read path correct** | Dashboard and leaderboard read from `ScoreLedger` (groupBy/aggregate), not from Workout. |
-
-**Conclusion:** The write path has been **implemented**. Route `POST /api/rounds/:roundId/workouts` is registered in `round.routes.ts`. `workout.service.logWorkout()` creates `Workout` and `ScoreLedger` in one transaction; daily cap from `round.scoringConfig.dailyCap` is applied; points are calculated server-side (0.2 pts/min, 5 pts/km) and stored in ScoreLedger as source of truth.
+**Conclusion:** Round detection is correct. Backend validates round exists, `status === 'active'`, and user is a member of the round’s club. No reliance on “current round” without validation.
 
 ---
 
-## 3. Stats Aggregation Update
+## 2. Points ledger insertion
 
-| Requirement | Status | Notes |
-|-------------|--------|--------|
-| UserStats table (§5.10) | ❌ **Missing** | Schema has no `UserStats` model. |
-| TeamStats table (§5.11) | ❌ **Missing** | Schema has no `TeamStats` model. |
-| Update on workout write (§6.5) | ❌ **N/A** | No stats tables, no workout write. |
-| Avoid heavy SUM on every request | ⚠️ **Partial** | Leaderboard and dashboard use `ScoreLedger` (and Workout for counts/recent list), which is correct per spec (“Use PointsLedger”). Aggregations are done via Prisma `groupBy`/`aggregate` on each request—no Redis or precomputed stats. |
+| Requirement | Status | Implementation |
+|-------------|--------|----------------|
+| Create Workout row | ✅ | `tx.workout.create()` inside `prisma.$transaction` in `workout.service.logWorkout()`. |
+| Create PointsLedger/ScoreLedger row | ✅ | `tx.scoreLedger.create()` in the same transaction, linked via `workoutId`. |
+| Points from ledger, not recomputed from workouts | ✅ | Leaderboard and stats read from ScoreLedger (see §§3–4). |
+| reasonType for audit | ✅ | ScoreLedger has `reasonType: 'workout'`; daily cap aggregate filters `reasonType: 'workout'`. |
+| teamId attribution | ✅ | `teamId` set from user’s `TeamMembership` for the round when present. |
 
-**Conclusion:** Precomputed **UserStats** and **TeamStats** tables are not implemented. The spec recommends them for scale; current implementation relies on live aggregation from `ScoreLedger` and `Workout`. For Phase 2 this is acceptable; for Phase 3/4 consider adding these tables and updating them in the same transaction as the workout + ledger write.
+**Details:**
 
----
+- **Transaction:** Workout and ScoreLedger are created in a single `prisma.$transaction`; no partial state.
+- **Points:** Raw points from duration/distance (0.2 pts/min, 5 pts/km); daily cap from `round.scoringConfig.dailyCap`; `finalAwardedPoints` = min(raw, remaining daily cap). Stored in ScoreLedger as `finalAwardedPoints` (and breakdown in `rawPoints`, `cappedPoints`, `dailyAdjustedPoints`, `ruleSnapshotJson`).
+- **Immutability:** No backend flow modifies points after logging; DELETE workout cascades to ScoreLedger (row removed, not adjusted).
 
-## 4. Leaderboard Cache Update
-
-| Requirement | Status | Notes |
-|-------------|--------|--------|
-| Redis sorted sets (§6.4) | ❌ **Not implemented** | No Redis in codebase. |
-| Update on score update | ❌ **N/A** | No score write path. |
-| Leaderboard read from PointsLedger | ✅ **Correct** | `LeaderboardService.getLeaderboard` uses `prisma.scoreLedger.groupBy` by `roundId`; no direct SUM over Workout. |
-
-**Conclusion:** Leaderboard **read** path follows the spec (scoring source = ScoreLedger). **Cache** (Redis) is a Phase 3 item per spec §20; current design is DB-only and will scale up to a point before Redis is needed.
+**Conclusion:** Points ledger insertion is correct and spec-compliant. Single transaction, ScoreLedger is source of truth, reasonType and teamId set.
 
 ---
 
-## Summary Table
+## 3. Stats aggregation update
 
-| Area | Spec | Current | Action |
+| Requirement | Status | Implementation |
+|-------------|--------|----------------|
+| UserStats exists and is updated on workout write | ✅ | `tx.userStats.upsert()` in same transaction: `userId_clubId_roundId`, increment `totalPoints`, `totalWorkouts`, `totalCalories`; set `updatedAt`. |
+| TeamStats exists and is updated on workout write | ✅ | If user has a team for the round, `tx.teamStats.upsert()` in same transaction: `teamId_roundId`, increment `totalPoints`, `totalWorkouts`; `memberCount` from current memberships; `updatedAt`. |
+| Stats read path uses precomputed tables | ✅ | `stats.service.getStatsMe()` uses `userStats.findUnique` first, falls back to ScoreLedger aggregate. `getTeamStats()` uses `teamStats.findUnique` first, falls back to ScoreLedger groupBy. |
+
+**Details:**
+
+- UserStats: key `userId_clubId_roundId`; create with `totalPoints`, `totalWorkouts`, `totalCalories`, `streakDays: 0`; update with increment.
+- TeamStats: only when `membership` exists for the user in that round; key `teamId_roundId`; `memberCount` taken from `membership.Team.Memberships.length` at write time.
+
+**Gap (known):** On **DELETE workout**, Workout and ScoreLedger are removed (cascade), but UserStats and TeamStats are **not** decremented. So after a delete, precomputed stats can be too high until a future workout write or a manual correction. Consider adding a delete handler that decrements UserStats/TeamStats or recomputes them for that user/team.
+
+**Conclusion:** Stats aggregation update on **log** is correct and in the same transaction as workout + ledger. Delete path does not update stats.
+
+---
+
+## 4. Leaderboard “cache” update
+
+| Requirement | Status | Implementation |
+|-------------|--------|----------------|
+| Leaderboard read from PointsLedger (not raw workouts) | ✅ | `LeaderboardService.getLeaderboard()` uses `prisma.scoreLedger.groupBy` by `userId` (individuals) or aggregates user points per team (teams); no SUM over Workout. |
+| Redis sorted sets updated on write (§6.3 step 10, §6.4) | ⚠️ **Not implemented** | No Redis in codebase. Leaderboard is computed on each GET from ScoreLedger. |
+
+**Details:**
+
+- **Individuals:** `scoreLedger.groupBy({ by: ['userId'], where: { roundId }, _sum: { finalAwardedPoints: true } })`, then sort and rank.
+- **Teams:** Teams for round + `scoreLedger.groupBy` by userId; team total = sum of members’ points from ledger; then sort and rank.
+
+Because every new workout writes to ScoreLedger in the same transaction as Workout and stats, the **next** GET leaderboard request sees the new row and rankings are correct. There is no separate “cache” to invalidate; the DB is the source of truth.
+
+**Conclusion:** Leaderboard data is correct and updates immediately (read-through from ScoreLedger). There is no Redis cache; spec’s “update Redis leaderboard sorted sets” is a scaling optimization for later (Phase 3 / §6.6).
+
+---
+
+## Summary table
+
+| Area | Spec | Current | Verdict |
 |------|------|---------|--------|
-| Round detection | Validate round, club, member, active | ✅ Implemented | `RoundController.logWorkout` + `logWorkout()` validate round exists, status active, user is club member |
-| Points ledger | Create Workout + ScoreLedger | ✅ Implemented | Single transaction in `workout.service.logWorkout`: create Workout then ScoreLedger with daily cap applied |
-| Stats aggregation | UserStats / TeamStats on write | No tables, live aggregate | **Defer tables; document as future work** |
-| Leaderboard cache | Redis on write | No Redis; read from DB | **Defer Redis; document as Phase 3** |
+| Round detection | Validate round exists, active, user in club | Round loaded by `roundId`; `status === 'active'`; `ensureMember(userId, round.clubId)` | ✅ Compliant |
+| Points ledger | Create Workout + ledger row; ledger = source of truth | Workout + ScoreLedger in one transaction; reasonType, teamId, daily cap | ✅ Compliant |
+| Stats aggregation | Update UserStats + TeamStats on write | Upsert UserStats and TeamStats in same transaction; stats APIs use precomputed first | ✅ Compliant (delete does not update stats) |
+| Leaderboard cache | Redis optional; leaderboard from ledger | No Redis; leaderboard read from ScoreLedger; data correct after each log | ✅ Compliant (no cache; N/A for Redis) |
 
 ---
 
 ## Recommendations
 
-1. **Implement workout logging endpoint**  
-   - Route: `POST /rounds/:roundId/workouts` (register in round routes or a dedicated workout route under rounds).  
-   - Validate: round exists, `round.status === 'active'`, user is club member via `ClubService.ensureMember(userId, round.clubId)`.  
-   - In one transaction: create `Workout`, then create `ScoreLedger` with points (raw, capped by daily cap, final).  
-   - Use round `scoringConfig.dailyCap` and same-day ScoreLedger sum for daily cap logic (align with dashboard).
-
-2. **Keep leaderboard read from ScoreLedger**  
-   - No change; already correct.
-
-3. **UserStats / TeamStats**  
-   - Add in a later migration and update them in the same transaction as workout + ledger when targeting higher scale.
-
-4. **Redis leaderboard**  
-   - Add per spec Phase 3 when optimizing for “fast leaderboard response” and high write frequency.
+1. **DELETE workout:** When a workout is deleted, consider decrementing or recomputing UserStats and TeamStats for that user/round and team/round so precomputed stats stay consistent.
+2. **Redis leaderboard:** Add per spec §6.4 when scaling (e.g. Phase 3) for fast rank lookups; current DB-only leaderboard is correct and acceptable until then.
 
 ---
 
-*Audit complete. Implementation of the workout logging endpoint (round validation + Workout + ScoreLedger) is required to satisfy the spec.*
+*Audit complete. Workout logging flow satisfies the spec for round detection, ledger insertion, and stats aggregation; leaderboard is correct with no Redis cache.*

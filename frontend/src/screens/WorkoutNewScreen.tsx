@@ -35,6 +35,7 @@ export default function WorkoutNewScreen() {
   const { selectedClub } = useClub();
   const { lastLoggedWorkout, setLastLoggedWorkout, optimisticallyAddWorkout } = useDashboardStore();
   const repeatLastIntent = route.params?.repeatLast === true;
+  const repeatWorkoutIndex = route.params?.repeatWorkoutIndex ?? 0;
 
   const [activities, setActivities] = useState<WorkoutActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
@@ -117,7 +118,13 @@ export default function WorkoutNewScreen() {
     loadDashboard();
   }, [loadDashboard]);
 
-  const lastWorkout = lastLoggedWorkout ?? (recentWorkouts[0] ? {
+  const workoutToRepeat = recentWorkouts[repeatWorkoutIndex];
+  const lastWorkout = lastLoggedWorkout ?? (workoutToRepeat ? {
+    activityType: workoutToRepeat.activityName,
+    points: workoutToRepeat.points,
+    durationMinutes: undefined,
+    distanceKm: undefined,
+  } : recentWorkouts[0] ? {
     activityType: recentWorkouts[0].activityName,
     points: recentWorkouts[0].points,
     durationMinutes: undefined,

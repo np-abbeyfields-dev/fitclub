@@ -2,6 +2,38 @@ import prisma from '../config/database';
 
 const EXPO_ACCESS_TOKEN = process.env.EXPO_ACCESS_TOKEN?.trim() || '';
 
+/** Create in-app notification for one user (FITCLUB_MASTER_SPEC §5.13). */
+export async function createInAppNotification(
+  userId: string,
+  type: string,
+  title: string,
+  body: string,
+  clubId?: string
+): Promise<void> {
+  await prisma.notification.create({
+    data: { userId, type, title, body, clubId: clubId ?? null },
+  });
+}
+
+/** Create ROUND_STARTED in-app notifications for all club members. Call after round activation. */
+export async function createRoundStartedNotifications(clubId: string, roundName: string): Promise<void> {
+  const members = await prisma.clubMembership.findMany({
+    where: { clubId },
+    select: { userId: true },
+  });
+  const title = 'Challenge is live';
+  const body = `🔥 ${roundName} is live!`;
+  await prisma.notification.createMany({
+    data: members.map((m) => ({
+      userId: m.userId,
+      clubId,
+      type: 'ROUND_STARTED',
+      title,
+      body,
+    })),
+  });
+}
+
 /**
  * Notify all club members that a challenge (round) is live.
  * Sends push notification "🔥 [Challenge Name] is live!" to every member with a registered push token.

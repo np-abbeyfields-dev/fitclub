@@ -90,10 +90,40 @@ export const clubService = {
         myRoundPoints: number;
         myTeamTotal: number;
         workoutCount: number;
-        weeklyActivity: Array<{ date: string; points: number }>;
+        weeklyActivity: Array<{ date: string; points: number; workoutCount?: number }>;
         currentStreak: number;
         estimatedCalories: number;
       };
     }>(`/clubs/${clubId}/dashboard`);
   },
+
+  /** Activity feed (FITCLUB_MASTER_SPEC §7.9). */
+  getFeed(clubId: string, params?: { before?: string; limit?: number }) {
+    const sp = new URLSearchParams();
+    if (params?.before) sp.set('before', params.before);
+    if (params?.limit != null) sp.set('limit', String(params.limit));
+    const q = sp.toString();
+    return request<{
+      success: boolean;
+      data: { items: FeedItem[]; nextCursor: string | null };
+    }>(`/clubs/${clubId}/feed${q ? `?${q}` : ''}`);
+  },
+};
+
+/** Activity feed item (FITCLUB_MASTER_SPEC §5.12). */
+export type FeedItemType =
+  | 'WORKOUT_LOGGED'
+  | 'STREAK_REACHED'
+  | 'TEAM_JOINED'
+  | 'ROUND_STARTED'
+  | 'TEAM_CREATED'
+  | 'MILESTONE_REACHED';
+
+export type FeedItem = {
+  id: string;
+  type: FeedItemType;
+  actorUserId: string;
+  actorName: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 };

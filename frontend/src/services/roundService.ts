@@ -26,7 +26,7 @@ export type Round = {
   scoringConfig: Record<string, unknown>;
   teamSize: number | null;
   locked: boolean;
-  status: 'draft' | 'active' | 'ended';
+  status: 'draft' | 'active' | 'completed';
   createdAt: string;
   updatedAt: string;
   Club?: { id: string; name: string };
@@ -64,4 +64,22 @@ export const roundService = {
       data: Array<{ id: string; rank: number; name: string; points: number; maxPoints: number; isCurrentUser?: boolean }>;
     }>(`/rounds/${roundId}/leaderboard?type=${type}`);
   },
+
+  getRoundSummary(roundId: string) {
+    return request<{
+      success: boolean;
+      data: RoundSummary;
+    }>(`/rounds/${roundId}/summary`);
+  },
+};
+
+export type RoundSummary = {
+  roundId: string;
+  roundName: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  totalPoints: number;
+  topIndividuals: Array<{ userId: string; name: string; points: number }>;
+  topTeams: Array<{ teamName: string; totalPoints: number }>;
 };

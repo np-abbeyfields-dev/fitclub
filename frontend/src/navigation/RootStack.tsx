@@ -4,8 +4,10 @@ import type { RootStackParamList } from './types';
 import { MainTabs } from './MainTabs';
 import SettingsScreen from '../screens/SettingsScreen';
 import PastRoundsScreen from '../screens/PastRoundsScreen';
+import RoundSummaryScreen from '../screens/RoundSummaryScreen';
 import RoundLeaderboardScreen from '../screens/RoundLeaderboardScreen';
 import RoundsScreen from '../screens/RoundsScreen';
+import RoundConfigScreen from '../screens/RoundConfigScreen';
 import MembersScreen from '../screens/MembersScreen';
 import TeamsManagementScreen from '../screens/TeamsManagementScreen';
 import ClubInfoScreen from '../screens/ClubInfoScreen';
@@ -26,8 +28,10 @@ export function RootStack() {
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="PastRounds" component={PastRoundsScreen} />
+      <Stack.Screen name="RoundSummary" component={RoundSummaryScreen} />
       <Stack.Screen name="RoundLeaderboard" component={RoundLeaderboardScreen} />
       <Stack.Screen name="Rounds" component={RoundsScreen} />
+      <Stack.Screen name="RoundConfig" component={RoundConfigScreen} />
       <Stack.Screen name="Members" component={MembersScreen} />
       <Stack.Screen name="TeamsManagement" component={TeamsManagementScreen} />
       <Stack.Screen name="ClubInfo" component={ClubInfoScreen} />

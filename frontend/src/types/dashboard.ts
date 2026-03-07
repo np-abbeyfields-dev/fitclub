@@ -32,7 +32,7 @@ export type DashboardData = {
   myRoundPoints: number;
   myTeamTotal: number;
   workoutCount: number;
-  weeklyActivity: Array<{ date: string; points: number }>;
+  weeklyActivity: Array<{ date: string; points: number; workoutCount?: number }>;
   currentStreak: number;
   estimatedCalories: number;
 };
