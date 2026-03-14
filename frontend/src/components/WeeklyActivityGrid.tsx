@@ -8,29 +8,41 @@ export type WeeklyDay = {
   points?: number;
 };
 
+export type WeeklyActivityGridOverrides = {
+  backgroundColor?: string;
+  labelColor?: string;
+  activeColor?: string;
+  cellBorderRadius?: number;
+  gap?: number;
+};
+
 type WeeklyActivityGridProps = {
   data: WeeklyDay[];
   maxWorkouts?: number;
   currentStreak?: number;
   /** Animate bar fill when mounting */
   animate?: boolean;
+  /** Optional style overrides (avoids Hermes optional-prop access issues) */
+  overrides?: WeeklyActivityGridOverrides;
 };
 
-/** Compact square size (50–60px) for each day cell */
-const BOX_SIZE = 52;
+/** Day cell size — kept small to avoid label overlap on narrow screens */
+const BOX_SIZE = 36;
 
 /**
  * Weekly activity: compact row of squares (S M T W T F S), success for active/streak days.
  * Optional opacity animation on load.
  */
-export function WeeklyActivityGrid({
-  data,
-  maxWorkouts: _maxWorkoutsProp,
-  currentStreak = 0,
-  animate = true,
-}: WeeklyActivityGridProps) {
+export function WeeklyActivityGrid(props: WeeklyActivityGridProps) {
+  const { data, currentStreak = 0, animate = true } = props;
   const theme = useTheme();
   const { colors, spacing: s, radius: r, typography } = theme;
+  const o = props.overrides;
+  const containerBg = o?.backgroundColor ?? colors.card;
+  const labelColorResolved = o?.labelColor ?? colors.textSecondary;
+  const activeDayColor = o?.activeColor ?? colors.energy;
+  const cellRadius = o?.cellBorderRadius ?? r.sm;
+  const squareGap = o?.gap ?? s.xxs;
   const animValues = useRef(data.map(() => new Animated.Value(1))).current;
 
   useEffect(() => {
@@ -60,17 +72,17 @@ export function WeeklyActivityGrid({
       style={[
         styles.wrap,
         {
-          backgroundColor: colors.card,
-          borderWidth: 1,
+          backgroundColor: containerBg,
+          borderWidth: o != null ? 0 : 1,
           borderColor: colors.border,
           borderRadius: r.md,
           paddingVertical: s.xs,
           paddingHorizontal: s.sm,
-          ...theme.shadows.card,
+          ...(o != null ? {} : theme.shadows.card),
         },
       ]}
     >
-      <View style={[styles.squaresRow, { flexDirection: 'row', alignItems: 'center', gap: s.xxs }]}>
+      <View style={[styles.squaresRow, { flexDirection: 'row', alignItems: 'center', gap: squareGap }]}>
         {data.map((day, index) => {
           const count = day.workoutCount ?? 0;
           const hasWorkouts = count > 0;
@@ -80,7 +92,7 @@ export function WeeklyActivityGrid({
           const bgColor = hasWorkouts
             ? isInStreak
               ? (colors.successActivity ?? colors.success)
-              : colors.energy
+              : activeDayColor
             : colors.chartInactive;
           const borderWidth = isInStreak ? 2 : 0;
 
@@ -91,7 +103,7 @@ export function WeeklyActivityGrid({
                 {
                   width: BOX_SIZE,
                   height: BOX_SIZE,
-                  borderRadius: r.sm,
+                  borderRadius: cellRadius,
                   backgroundColor: bgColor,
                   borderWidth,
                   borderColor: colors.successActivity ?? colors.success,
@@ -105,7 +117,7 @@ export function WeeklyActivityGrid({
                   style={[
                     typography.caption,
                     {
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: '800',
                       color: colors.textInverse,
                     },
@@ -118,14 +130,14 @@ export function WeeklyActivityGrid({
           );
 
           return (
-            <View key={day.date} style={[styles.cellWrap, { flex: 1, alignItems: 'center' }]}>
+            <View key={day.date} style={[styles.cellWrap, { flex: 1, alignItems: 'center', minWidth: 0 }]}>
               <View style={{ width: BOX_SIZE, height: BOX_SIZE }}>
                 {cellContent}
                 {animate && animValues[index] != null ? (
                   <Animated.View
                     style={[
                       StyleSheet.absoluteFillObject,
-                      { backgroundColor: colors.card, opacity: animValues[index] },
+                      { backgroundColor: containerBg, opacity: animValues[index] },
                     ]}
                     pointerEvents="none"
                   />
@@ -135,14 +147,12 @@ export function WeeklyActivityGrid({
           );
         })}
       </View>
-      <View style={[styles.labels, { flexDirection: 'row', marginTop: s.xxs }]}>
+      <View style={[styles.labels, { flexDirection: 'row', marginTop: s.xs }]}>
         {data.map((day) => (
-          <View key={day.date} style={{ flex: 1, alignItems: 'center' }}>
+          <View key={day.date} style={{ flex: 1, alignItems: 'center', minWidth: 0 }}>
             <Text
-              style={[
-                typography.caption,
-                { color: colors.textSecondary, fontWeight: '600', fontSize: 11 },
-              ]}
+              numberOfLines={1}
+              style={[typography.caption, { color: labelColorResolved, fontWeight: '600', fontSize: 10 }]}
             >
               {shortDay(day.date)}
             </Text>

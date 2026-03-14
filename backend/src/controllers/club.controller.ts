@@ -49,6 +49,22 @@ export class ClubController {
     res.json({ success: true, data: club } as ApiResponse);
   }
 
+  static async update(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    if (!clubId) {
+      res.status(400).json({ success: false, error: 'Club ID required.' } as ApiResponse);
+      return;
+    }
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    if (!name) {
+      res.status(400).json({ success: false, error: 'Club name is required.' } as ApiResponse);
+      return;
+    }
+    const club = await ClubService.updateClub(clubId, userId, { name });
+    res.json({ success: true, data: club, message: 'Club updated.' } as ApiResponse);
+  }
+
   static async listMine(req: AuthRequest, res: Response): Promise<void> {
     const clubs = await ClubService.listMyClubs(req.user!.id);
     res.json({ success: true, data: clubs } as ApiResponse);
@@ -119,6 +135,27 @@ export class ClubController {
     }
     const data = await StatsService.getClubStatsOverview(clubId, userId);
     res.json({ success: true, data } as ApiResponse);
+  }
+
+  /** POST /clubs/:clubId/invite — any member sends invite email. Body: { email }. */
+  static async inviteByEmail(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const clubId = Array.isArray(req.params.clubId) ? req.params.clubId[0] : req.params.clubId;
+    if (!clubId) {
+      res.status(400).json({ success: false, error: 'Club ID required.' } as ApiResponse);
+      return;
+    }
+    const email = typeof req.body?.email === 'string' ? req.body.email : '';
+    if (!email.trim()) {
+      res.status(400).json({ success: false, error: 'Email is required.' } as ApiResponse);
+      return;
+    }
+    const result = await ClubService.sendInviteByEmail(clubId, userId, email);
+    if (result.sent) {
+      res.status(200).json({ success: true, message: 'Invite sent.' } as ApiResponse);
+    } else {
+      res.status(502).json({ success: false, error: result.error || 'Failed to send invite email.' } as ApiResponse);
+    }
   }
 
   /** GET /clubs/:clubId/feed — activity feed (§7.9). */

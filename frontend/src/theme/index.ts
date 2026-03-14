@@ -3,7 +3,7 @@
  * Structure: colors (palette) + tokens (shared) + light/dark (themes) + ThemeContext (provider + useTheme).
  */
 
-export { lightPalette, darkPalette, colors } from './colors';
+export { fitnessPalette, lightPalette, darkPalette, colors } from './colors';
 export { typography as typographyScale, type TypographyScale } from './typography';
 export { spacing as spacingScale, type SpacingScale } from './spacing';
 export { radius as radiusScale, type RadiusScale } from './radius';

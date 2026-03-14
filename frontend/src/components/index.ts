@@ -17,3 +17,4 @@ export { ChallengeLaunchModal } from './ChallengeLaunchModal';
 export { MilestoneModal, type MilestoneKind } from './MilestoneModal';
 export { RoundCountdown, type RoundCountdownProps } from './RoundCountdown';
 export { WeeklyActivityGrid, type WeeklyDay } from './WeeklyActivityGrid';
+export { PerformanceHeatmap, type PerformanceHeatmapProps } from './PerformanceHeatmap';

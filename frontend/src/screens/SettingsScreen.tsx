@@ -96,6 +96,39 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
+      <Text style={[styles.sectionTitle, { ...typography.body, fontWeight: '700', color: colors.textSecondary, marginTop: spacing.lg, marginBottom: spacing.sm }]}>
+        Help & support
+      </Text>
+      <View style={[styles.section, { padding: 0, marginTop: 0 }]}>
+        <TouchableOpacity
+          onPress={() => (navigation as any).navigate('FAQ')}
+          style={[styles.optionRow, { flexDirection: 'row', alignItems: 'center', padding: spacing.sm, marginBottom: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }]}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="help-circle-outline" size={22} color={colors.primary} />
+          <Text style={[styles.optionLabel, { color: colors.text, fontWeight: '500', marginLeft: spacing.sm, flex: 1 }]}>FAQ</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => (navigation as any).navigate('ReportBug')}
+          style={[styles.optionRow, { flexDirection: 'row', alignItems: 'center', padding: spacing.sm, marginBottom: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }]}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="bug-outline" size={22} color={colors.primary} />
+          <Text style={[styles.optionLabel, { color: colors.text, fontWeight: '500', marginLeft: spacing.sm, flex: 1 }]}>Report a bug</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => (navigation as any).navigate('ContactUs')}
+          style={[styles.optionRow, { flexDirection: 'row', alignItems: 'center', padding: spacing.sm, marginBottom: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }]}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="mail-outline" size={22} color={colors.primary} />
+          <Text style={[styles.optionLabel, { color: colors.text, fontWeight: '500', marginLeft: spacing.sm, flex: 1 }]}>Contact us</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
       <Text style={[styles.subtitle, { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.lg }]}>
         Club and app settings (admin)
       </Text>

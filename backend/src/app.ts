@@ -14,6 +14,9 @@ import teamRoutes from './routes/team.routes';
 import userRoutes from './routes/user.routes';
 import workoutRoutes from './routes/workout.routes';
 import notificationRoutes from './routes/notification.routes';
+import internalRoutes from './routes/internal.routes';
+import feedbackRoutes from './routes/feedback.routes';
+import customChallengeRoutes from './routes/customChallenge.routes';
 
 const app = express();
 
@@ -76,6 +79,9 @@ app.use('/api', teamRoutes);
 app.use('/api', userRoutes);
 app.use('/api', workoutRoutes);
 app.use('/api', notificationRoutes);
+app.use('/api/custom-challenges', customChallengeRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api', internalRoutes);
 
 app.use(errorHandler);
 

@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Animated,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -14,13 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme';
 import {
-  Card,
   ChallengeLaunchModal,
   CircularProgressRing,
-  HeroMetricCard,
-  MetricCard,
   MilestoneModal,
-  RoundCountdown,
   WeeklyActivityGrid,
   type MilestoneKind,
 } from '../components';
@@ -28,8 +25,9 @@ import { useClub } from '../context/ClubContext';
 import { useAuthStore } from '../store/authStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { clubService, type FeedItem } from '../services/clubService';
-import type { DashboardData } from '../types/dashboard';
-import { RANK_EMOJI } from '../constants/rank';
+import { roundService } from '../services/roundService';
+import type { DashboardData, LastCompletedRoundRecap } from '../types/dashboard';
+import { RANK_MEDAL } from '../constants/rank';
 
 const CHALLENGE_LAUNCH_SEEN_KEY = (roundId: string) => `challengeLaunchSeen_${roundId}`;
 const MILESTONES_SEEN_KEY = 'fitclub_milestones_seen';
@@ -143,6 +141,239 @@ function getWelcomeBanner(displayName: string | undefined, data: DashboardData):
 
 const PROGRESS_BAR_HEIGHT = 8;
 
+type RoundRecapDesign = typeof HOME_DESIGN_LIGHT;
+
+function RoundRecapBlock({
+  recap,
+  cardStyle,
+  d,
+  s,
+  typography,
+  colors,
+  styles: styleRef,
+  onViewFullStandings,
+}: {
+  recap: LastCompletedRoundRecap;
+  cardStyle: object;
+  d: RoundRecapDesign;
+  s: ReturnType<typeof useTheme>['spacing'];
+  typography: ReturnType<typeof useTheme>['typography'];
+  colors: ReturnType<typeof useTheme>['colors'];
+  styles: typeof styles;
+  onViewFullStandings: () => void;
+}) {
+  const medalColor = (rank: number) => (rank === 1 ? colors.gold : rank === 2 ? colors.silver : colors.bronze);
+  return (
+    <View style={{ marginBottom: d.sectionGap }}>
+      {/* 1. Round Complete Card */}
+      <View style={[styleRef.fitnessCard, cardStyle, { marginBottom: d.sectionGap }]}>
+        <Text style={[typography.caption, { color: d.textSecondary, marginBottom: s.xs, textTransform: 'uppercase', fontWeight: '700', letterSpacing: 0.5 }]}>
+          Round complete
+        </Text>
+        <Text style={[typography.title, { color: d.textPrimary, fontWeight: '800', marginBottom: s.sm }]} numberOfLines={1}>
+          {recap.roundName}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.xs }}>
+          <Text style={{ fontSize: 22 }}>🥇</Text>
+          <Text style={[typography.body, { color: d.textPrimary, fontWeight: '700', flex: 1 }]} numberOfLines={1}>
+            {recap.winningTeamName}
+          </Text>
+          <Text style={[typography.label, { color: d.primary, fontWeight: '800' }]}>
+            {recap.winningTeamPoints.toLocaleString()} pts
+          </Text>
+        </View>
+      </View>
+
+      {/* 2. Your Team Summary */}
+      {(recap.myTeamName != null || recap.myTeamRank != null) && (
+        <View style={[styleRef.fitnessCard, cardStyle, { marginBottom: d.sectionGap }]}>
+          <Text style={[typography.caption, { color: d.textSecondary, marginBottom: s.xs, fontWeight: '700' }]}>
+            Your team
+          </Text>
+          <Text style={[typography.title, { color: d.textPrimary, fontWeight: '700', marginBottom: s.xxs }]} numberOfLines={1}>
+            {recap.myTeamName ?? '—'}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: s.sm, flexWrap: 'wrap' }}>
+            {recap.myTeamRank != null && (
+              <Text style={[typography.body, { color: d.textSecondary, fontWeight: '600' }]}>
+                Rank #{recap.myTeamRank}
+              </Text>
+            )}
+            {recap.myTeamPoints != null && (
+              <Text style={[typography.label, { color: d.primary, fontWeight: '800' }]}>
+                {recap.myTeamPoints.toLocaleString()} pts
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* 3. Your Contribution */}
+      <View style={[styleRef.fitnessCard, cardStyle, { marginBottom: d.sectionGap }]}>
+        <Text style={[typography.caption, { color: d.textSecondary, marginBottom: s.xs, fontWeight: '700' }]}>
+          Your contribution
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: s.md, alignItems: 'baseline' }}>
+          <Text style={[typography.title, { color: d.textPrimary, fontWeight: '800' }]}>
+            {recap.myPoints.toLocaleString()} pts
+          </Text>
+          <Text style={[typography.body, { color: d.textSecondary, fontWeight: '600' }]}>
+            {recap.myWorkoutCount} workout{recap.myWorkoutCount === 1 ? '' : 's'}
+          </Text>
+          {recap.myTeamPoints != null && recap.myTeamPoints > 0 && (
+            <Text style={[typography.label, { color: d.primary, fontWeight: '700' }]}>
+              {recap.contributionPercent}% of team
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* 4. Top 3 Podium */}
+      {recap.topTeams.length > 0 && (
+        <View style={[styleRef.fitnessCard, cardStyle, { marginBottom: d.sectionGap }]}>
+          <Text style={[typography.caption, { color: d.textSecondary, marginBottom: s.sm, fontWeight: '700' }]}>
+            Top 3
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', gap: s.xs }}>
+            {([2, 1, 3] as const).map((rank) => {
+              const entry = recap.topTeams.find((t) => t.rank === rank);
+              if (!entry) return null;
+              const isFirst = rank === 1;
+              return (
+                <View key={entry.rank} style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ fontSize: isFirst ? 28 : 24, marginBottom: 2 }}>{RANK_MEDAL[rank]}</Text>
+                  <View
+                    style={{
+                      width: '100%',
+                      backgroundColor: d.cardBackground,
+                      borderWidth: 1,
+                      borderColor: d.border,
+                      borderRadius: 10,
+                      paddingVertical: s.sm,
+                      paddingHorizontal: s.xs,
+                      alignItems: 'center',
+                      minHeight: rank === 1 ? 76 : 64,
+                      justifyContent: 'flex-end',
+                    }}
+                  >
+                    <Text style={[typography.caption, { color: d.textSecondary, fontWeight: '700' }]}>#{rank}</Text>
+                    <Text style={[typography.caption, { color: d.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
+                      {entry.teamName}
+                    </Text>
+                    <Text style={[typography.label, { color: medalColor(rank), fontWeight: '800', fontSize: 13 }]}>
+                      {entry.points.toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* 5. CTA */}
+      <TouchableOpacity
+        style={[
+          styleRef.heroCta,
+          {
+            height: d.buttonHeight,
+            paddingVertical: 0,
+            paddingHorizontal: s.spacingXL,
+            borderRadius: d.buttonRadius,
+            backgroundColor: d.primary,
+            justifyContent: 'center',
+            alignItems: 'center',
+            ...d.buttonShadow,
+          },
+        ]}
+        onPress={onViewFullStandings}
+        activeOpacity={0.85}
+      >
+        <Text style={[typography.section, { color: '#FFFFFF', fontWeight: '700', fontSize: 16 }]}>
+          View full standings
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+/** Premium light fitness design — Home screen */
+const HOME_DESIGN_LIGHT = {
+  primary: '#FF6B35',
+  background: '#F8FAFC',
+  cardBackground: '#FFFFFF',
+  textPrimary: '#0F172A',
+  textSecondary: '#64748B',
+  textMuted: '#64748B',
+  border: '#E2E8F0',
+  progressColor: '#FF6B35',
+  progressRemaining: '#E2E8F0',
+  cardRadius: 22,
+  cardPadding: 20,
+  sectionGap: 24,
+  buttonHeight: 56,
+  buttonRadius: 18,
+  cardShadow: Platform.select({
+    ios: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+    },
+    android: { elevation: 3 },
+    default: {},
+  }),
+  buttonShadow: Platform.select({
+    ios: {
+      shadowColor: '#FF6B35',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+    },
+    android: { elevation: 4 },
+    default: {},
+  }),
+};
+
+/** Dark mode — premium fitness (Strava / Nike Run Club style) */
+const HOME_DESIGN_DARK = {
+  primary: '#FF6B35',
+  background: '#0F172A',
+  cardBackground: '#1E293B',
+  cardElevated: '#334155',
+  textPrimary: '#F8FAFC',
+  textSecondary: '#94A3B8',
+  textMuted: '#64748B',
+  border: '#334155',
+  progressColor: '#FF6B35',
+  progressRemaining: '#334155',
+  cardRadius: 22,
+  cardPadding: 20,
+  sectionGap: 24,
+  buttonHeight: 56,
+  buttonRadius: 18,
+  cardShadow: Platform.select({
+    ios: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+    },
+    android: { elevation: 2 },
+    default: {},
+  }),
+  buttonShadow: Platform.select({
+    ios: {
+      shadowColor: '#FF6B35',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 6,
+    },
+    android: { elevation: 4 },
+    default: {},
+  }),
+};
+
 export default function HomeScreen() {
   const navigation = useNavigation();
   const theme = useTheme();
@@ -157,6 +388,7 @@ export default function HomeScreen() {
   const [showLaunchModal, setShowLaunchModal] = useState(false);
   const [milestoneToShow, setMilestoneToShow] = useState<MilestoneKind | null>(null);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+  const [recapFetched, setRecapFetched] = useState<LastCompletedRoundRecap | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const loadDashboard = async () => {
@@ -177,6 +409,8 @@ export default function HomeScreen() {
           teamRank: null,
           myTeamRank: null,
           todayPoints: 0,
+          teamPointsToday: 0,
+          topContributorsToday: [],
           dailyCap: d.dailyCap,
           topTeams: [],
           topTeamsAll: [],
@@ -187,6 +421,7 @@ export default function HomeScreen() {
           weeklyActivity: d.weeklyActivity ?? [],
           currentStreak: d.currentStreak ?? 0,
           estimatedCalories: d.estimatedCalories ?? 0,
+          lastCompletedRoundRecap: d.lastCompletedRoundRecap ?? null,
         };
       } else {
         const topTeamsAll = d.topTeams;
@@ -212,6 +447,8 @@ export default function HomeScreen() {
           teamRank,
           myTeamRank: d.myTeamRank ?? null,
           todayPoints: d.todayPoints,
+          teamPointsToday: d.teamPointsToday ?? 0,
+          topContributorsToday: d.topContributorsToday ?? [],
           dailyCap: d.dailyCap,
           topTeams,
           topTeamsAll,
@@ -224,8 +461,19 @@ export default function HomeScreen() {
           estimatedCalories: d.estimatedCalories ?? 0,
         };
       }
+      // Don't overwrite optimistic today values: refetch can lag or return 0 for teamPointsToday (e.g. solo user).
+      const cached = useDashboardStore.getState().getDashboardForClub(selectedClub.id);
+      if (cached && cached.round?.id === data.round?.id) {
+        data = {
+          ...data,
+          todayPoints: Math.max(data.todayPoints, cached.todayPoints),
+          teamPointsToday: Math.max(data.teamPointsToday, cached.teamPointsToday),
+        };
+      }
       setData(data);
       useDashboardStore.getState().setDashboard(data, selectedClub.id);
+      if (data.round?.id && data.round.name !== 'No active round') setRecapFetched(null);
+      if (data.lastCompletedRoundRecap) setRecapFetched(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load dashboard');
       setData(null);
@@ -233,6 +481,72 @@ export default function HomeScreen() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!selectedClub || !data) return;
+    if (data.round?.id && data.round.name !== 'No active round') {
+      setRecapFetched(null);
+      return;
+    }
+    if (data.lastCompletedRoundRecap) {
+      setRecapFetched(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await roundService.listByClub(selectedClub.id);
+        const rounds = (res.data ?? []).filter(
+          (r) =>
+            r.status === 'completed' ||
+            (r.status === 'active' && new Date(r.endDate) < new Date(new Date().setHours(0, 0, 0, 0)))
+        );
+        const sorted = [...rounds].sort(
+          (a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime()
+        );
+        const lastRound = sorted[0];
+        if (!lastRound || cancelled) return;
+        const [teamsRes, indRes] = await Promise.all([
+          roundService.getLeaderboard(lastRound.id, 'teams'),
+          roundService.getLeaderboard(lastRound.id, 'individuals'),
+        ]);
+        if (cancelled) return;
+        const teams = teamsRes.data ?? [];
+        const individuals = indRes.data ?? [];
+        const winner = teams[0];
+        const topTeams = teams.slice(0, 3).map((t, i) => ({
+          rank: i + 1,
+          teamName: t.name,
+          points: t.points,
+        }));
+        const myTeam = teams.find((t) => t.isCurrentUser);
+        const myEntry = individuals.find((i) => i.isCurrentUser);
+        const myPoints = myEntry?.points ?? 0;
+        const myTeamPoints = myTeam?.points ?? null;
+        const contributionPercent =
+          myTeamPoints != null && myTeamPoints > 0 ? Math.round((myPoints / myTeamPoints) * 100) : 0;
+        const recap: LastCompletedRoundRecap = {
+          roundId: lastRound.id,
+          roundName: lastRound.name,
+          winningTeamName: winner?.name ?? '—',
+          winningTeamPoints: winner?.points ?? 0,
+          topTeams,
+          myTeamName: myTeam?.name ?? null,
+          myTeamRank: myTeam?.rank ?? null,
+          myTeamPoints,
+          myPoints,
+          myWorkoutCount: 0,
+          contributionPercent,
+        };
+        if (!cancelled) setRecapFetched(recap);
+      } catch {
+        if (!cancelled) setRecapFetched(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClub?.id, data?.round?.id, data?.round?.name, data?.lastCompletedRoundRecap]);
 
   const loadFeed = useCallback(async () => {
     if (!selectedClub) return;
@@ -347,7 +661,7 @@ export default function HomeScreen() {
   if (!clubsLoading && (clubs ?? []).length === 0) {
     return (
       <ScrollView
-        style={[styles.container, { backgroundColor: colors.background }]}
+        style={[styles.container, { backgroundColor: colors.backgroundPrimary }]}
         contentContainerStyle={[styles.emptyScrollContent, { padding: s.lg, paddingBottom: s.xxl + s.lg }]}
         showsVerticalScrollIndicator={false}
       >
@@ -386,24 +700,24 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {/* How FitClub Works */}
+        {/* How FitClub Works — stacked vertically so cards are readable on all screen sizes */}
         <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', marginBottom: s.sm }]}>How FitClub works</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: s.sm, marginBottom: s.xl }}>
-          <View style={[styles.emptyConceptCard, { flex: 1, minWidth: 100, backgroundColor: isDark ? colors.surfaceElevated : colors.onboardingCardJoin, borderRadius: r.md, padding: s.md, ...shadows.card }]}>
+        <View style={{ gap: s.md, marginBottom: s.xl }}>
+          <View style={[styles.emptyConceptCard, { backgroundColor: isDark ? colors.surfaceElevated : colors.onboardingCardJoin, borderRadius: r.md, padding: s.md, ...shadows.card }]}>
             <View style={[styles.emptyConceptIconWrap, { width: 44, height: 44, borderRadius: r.md, backgroundColor: isDark ? colors.surface : colors.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: s.xs }]}>
               <Ionicons name="people" size={26} color={colors.primary} />
             </View>
             <Text style={[typography.label, { color: colors.text, marginBottom: s.xxs }]}>Join a Club</Text>
             <Text style={[typography.bodySmall, { color: colors.textSecondary, lineHeight: 18 }]}>Fitness challenge rounds happen inside clubs with friends.</Text>
           </View>
-          <View style={[styles.emptyConceptCard, { flex: 1, minWidth: 100, backgroundColor: isDark ? colors.surfaceElevated : colors.onboardingCardCompete, borderRadius: r.md, padding: s.md, ...shadows.card }]}>
+          <View style={[styles.emptyConceptCard, { backgroundColor: isDark ? colors.surfaceElevated : colors.onboardingCardCompete, borderRadius: r.md, padding: s.md, ...shadows.card }]}>
             <View style={[styles.emptyConceptIconWrap, { width: 44, height: 44, borderRadius: r.md, backgroundColor: isDark ? colors.surface : colors.goldMuted, alignItems: 'center', justifyContent: 'center', marginBottom: s.xs }]}>
               <Ionicons name="trophy" size={26} color={colors.competition} />
             </View>
             <Text style={[typography.label, { color: colors.text, marginBottom: s.xxs }]}>Compete in Rounds</Text>
             <Text style={[typography.bodySmall, { color: colors.textSecondary, lineHeight: 18 }]}>Each round is a new fitness competition.</Text>
           </View>
-          <View style={[styles.emptyConceptCard, { flex: 1, minWidth: 100, backgroundColor: isDark ? colors.surfaceElevated : colors.onboardingCardLog, borderRadius: r.md, padding: s.md, ...shadows.card }]}>
+          <View style={[styles.emptyConceptCard, { backgroundColor: isDark ? colors.surfaceElevated : colors.onboardingCardLog, borderRadius: r.md, padding: s.md, ...shadows.card }]}>
             <View style={[styles.emptyConceptIconWrap, { width: 44, height: 44, borderRadius: r.md, backgroundColor: isDark ? colors.surface : colors.energySoft, alignItems: 'center', justifyContent: 'center', marginBottom: s.xs }]}>
               <Ionicons name="flame" size={26} color={colors.energy} />
             </View>
@@ -438,7 +752,7 @@ export default function HomeScreen() {
 
   if (loading && !data) {
     return (
-      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.backgroundPrimary }]}>
         <Text style={[typography.body, { color: colors.textSecondary }]}>Loading…</Text>
       </View>
     );
@@ -446,7 +760,7 @@ export default function HomeScreen() {
 
   if (error) {
     return (
-      <View style={[styles.container, styles.centered, { backgroundColor: colors.background, padding: s.md }]}>
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.backgroundPrimary, padding: s.md }]}>
         <Text style={[typography.body, { color: colors.error }]}>{error}</Text>
         <TouchableOpacity onPress={() => loadDashboard()} style={{ marginTop: s.md }}>
           <Text style={[typography.label, { color: colors.primary }]}>Retry</Text>
@@ -458,15 +772,8 @@ export default function HomeScreen() {
   if (!data) return null;
 
   const weeklyActivity = data.weeklyActivity ?? [];
-  const topTeamsAll = data.topTeamsAll ?? [];
   const maxWeeklyWorkouts = Math.max(1, ...weeklyActivity.map((d) => d.workoutCount ?? 0));
-  const contributionPct = data.myTeamTotal > 0 ? (data.myRoundPoints / data.myTeamTotal) * 100 : 0;
   const myTeamRankNum = data.myTeamRank;
-  const teamAbove =
-    myTeamRankNum != null && myTeamRankNum > 1
-      ? topTeamsAll.find((t) => t.rank === myTeamRankNum - 1)
-      : null;
-  const gapToNext = teamAbove ? teamAbove.points - data.myTeamTotal : 0;
   const welcome = getWelcomeBanner(user?.displayName, data);
 
   const handleBannerCta = () => {
@@ -475,415 +782,270 @@ export default function HomeScreen() {
       (navigation as any).navigate('LeaderboardTab');
   };
 
-  const weeklyPoints = weeklyActivity.reduce((sum, d) => sum + (d.points ?? 0), 0);
+  const d = isDark ? HOME_DESIGN_DARK : HOME_DESIGN_LIGHT;
+  const dark = d; // alias for any code that still references dark (e.g. cached bundle)
+  const cardStyle = {
+    backgroundColor: d.cardBackground,
+    borderRadius: d.cardRadius,
+    padding: d.cardPadding,
+    ...d.cardShadow,
+  };
+
+  const teamRankDiff = (() => {
+    if (!data.teamRank || data.myTeamRank == null || !data.topTeamsAll?.length) return null;
+    const rank = data.myTeamRank;
+    const ourPoints = data.teamRank.points;
+    if (rank === 1) {
+      const next = data.topTeamsAll.find((t) => t.rank === 2);
+      if (!next) return null;
+      return { type: 'ahead' as const, pts: ourPoints - next.points, teamName: next.teamName };
+    }
+    const above = data.topTeamsAll.find((t) => t.rank === rank - 1);
+    if (!above) return null;
+    return { type: 'behind' as const, pts: above.points - ourPoints, teamName: above.teamName };
+  })();
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <View style={[styles.container, { backgroundColor: d.background }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { padding: s.sm, paddingBottom: s.xxl + s.md, gap: 0 }]}
+        contentContainerStyle={[styles.scrollContent, { padding: d.cardPadding, paddingBottom: s.xxl + d.sectionGap }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={d.primary} />
         }
       >
-        {/* A. Hero — compact round banner: title, days left, pts this week, team, CTA */}
         {data.round.id && data.round.name !== 'No active round' ? (
-          <View style={{ marginBottom: data.teamRank ? s.sm : s.md }}>
-            <HeroMetricCard
-              roundTitle={data.round.name}
-              daysLeft={data.round.daysLeft}
-              endDate={data.round.endDate}
-              pointsThisWeek={weeklyPoints}
-              ctaLabel={welcome.ctaLabel ?? undefined}
-              onCtaPress={handleBannerCta}
-            />
-          </View>
+          <Animated.View style={[styles.main, { opacity: fadeAnim }]}>
+            {/* 1. Team Status Card */}
+            {data.teamRank && myTeamRankNum != null && (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => (navigation as any).navigate('LeaderboardTab')}
+                style={[styles.fitnessCard, cardStyle, { marginBottom: d.sectionGap }]}
+              >
+                <Text style={[typography.caption, { color: d.textSecondary, marginBottom: s.xs }]}>
+                  {data.round.name} · {data.round.daysLeft} day{data.round.daysLeft === 1 ? '' : 's'} left
+                </Text>
+                <Text style={[typography.title, { color: d.textPrimary, fontWeight: '700', marginBottom: s.xs }]} numberOfLines={1}>
+                  {data.teamRank.teamName}
+                </Text>
+                <Text style={[typography.hero, { color: d.primary, fontWeight: '800', fontSize: 40, lineHeight: 48, marginBottom: s.spacingSmall }]}>
+                  Rank #{myTeamRankNum}
+                </Text>
+                {teamRankDiff && (
+                  <Text style={[typography.caption, { color: d.textSecondary, fontWeight: '600' }]}>
+                    {teamRankDiff.type === 'ahead'
+                      ? `+${teamRankDiff.pts} pts ahead of ${teamRankDiff.teamName}`
+                      : `${teamRankDiff.pts} pts behind ${teamRankDiff.teamName}`}
+                  </Text>
+                )}
+                <Text style={[typography.caption, { color: d.primary, fontWeight: '600', marginTop: s.spacingSmall, fontSize: 13 }]}>
+                  View leaderboard →
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 2. Impact Progress Ring */}
+            <View style={[styles.fitnessCard, cardStyle, { marginBottom: d.sectionGap, alignItems: 'center' }]}>
+              <View style={[styles.heroRingWrap, { height: 200 }]}>
+                <CircularProgressRing
+                  progress={
+                    data.teamPointsToday > 0
+                      ? Math.min(1, data.todayPoints / data.teamPointsToday)
+                      : data.todayPoints > 0
+                        ? 1
+                        : 0
+                  }
+                  size={200}
+                  strokeWidth={14}
+                  animated
+                  gradient={false}
+                  glow={false}
+                  progressColor={d.progressColor}
+                  trackColor={d.progressRemaining}
+                />
+                <View style={[StyleSheet.absoluteFill, styles.heroRingCenter, { zIndex: 1 }]} pointerEvents="none">
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontFamily: typography.hero.fontFamily, fontSize: 52, fontWeight: '800', color: d.textPrimary, textAlign: 'center' }}>
+                      {String(data.todayPoints ?? 0)}
+                    </Text>
+                    <Text style={[typography.caption, { color: d.textSecondary, fontWeight: '600', textAlign: 'center', fontSize: 14, marginTop: 2 }]}>
+                      Team Points Today
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <Text style={[typography.caption, { color: d.textSecondary, fontWeight: '600', textAlign: 'center', marginTop: s.spacingSmall, fontSize: 14 }]}>
+                {data.teamPointsToday === 0
+                  ? data.todayPoints > 0
+                    ? "You're the only one who's logged today — that's 100% of your team's points so far."
+                    : 'Log the first workout for your team today.'
+                  : `You contributed ${Math.round((data.todayPoints / data.teamPointsToday) * 100)}% of your team's points today.`}
+              </Text>
+            </View>
+
+            {/* 3. Primary CTA */}
+            <TouchableOpacity
+              style={[
+                styles.heroCta,
+                {
+                  marginBottom: d.sectionGap,
+                  height: d.buttonHeight,
+                  paddingVertical: 0,
+                  paddingHorizontal: s.spacingXL,
+                  borderRadius: d.buttonRadius,
+                  backgroundColor: d.primary,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  ...d.buttonShadow,
+                },
+              ]}
+              onPress={() => (navigation as any).navigate('WorkoutNew')}
+              activeOpacity={0.85}
+            >
+              <Text style={[typography.section, { color: '#FFFFFF', fontWeight: '700', fontSize: 16 }]}>Log Workout</Text>
+            </TouchableOpacity>
+
+            {/* 4. Team Momentum — top contributors today */}
+            <View style={[styles.fitnessCard, cardStyle, { marginBottom: d.sectionGap }]}>
+              <Text style={[typography.section, { color: d.textPrimary, fontWeight: '700', marginBottom: s.spacingMedium }]}>
+                Team Momentum
+              </Text>
+              {(data.topContributorsToday?.length ?? 0) === 0 ? (
+                <Text style={[typography.caption, { color: d.textSecondary }]}>
+                  No points logged yet today. Log a workout to lead the board.
+                </Text>
+              ) : (
+                data.topContributorsToday.slice(0, 8).map((c, index) => (
+                  <View
+                    key={`${c.displayName}-${index}`}
+                    style={[
+                      styles.feedRow,
+                      {
+                        borderBottomWidth: index < Math.min(8, data.topContributorsToday.length) - 1 ? 0.5 : 0,
+                        borderBottomColor: d.border,
+                        paddingVertical: 10,
+                      },
+                    ]}
+                  >
+                    <Text style={[typography.caption, { color: d.primary, fontWeight: '700', marginRight: s.spacingSmall, minWidth: 20 }]}>
+                      #{index + 1}
+                    </Text>
+                    <Text style={[typography.body, { color: d.textPrimary, fontWeight: '500', flex: 1 }]} numberOfLines={1}>
+                      {c.displayName}
+                    </Text>
+                    <Text style={[typography.section, { color: d.primary, fontWeight: '700', fontSize: 14 }]}>
+                      {c.points} pts
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
+
+            {/* 5. Weekly Activity */}
+            <View style={[styles.fitnessCard, cardStyle, { marginBottom: d.sectionGap }]}>
+              <Text style={[typography.section, { color: d.textPrimary, fontWeight: '700', marginBottom: s.spacingMedium }]}>
+                Weekly Activity
+              </Text>
+              <WeeklyActivityGrid
+                data={weeklyActivity}
+                maxWorkouts={maxWeeklyWorkouts}
+                currentStreak={data.currentStreak}
+                animate
+                overrides={{
+                  backgroundColor: d.cardBackground,
+                  labelColor: d.textSecondary,
+                  activeColor: d.primary,
+                  cellBorderRadius: 10,
+                  gap: 10,
+                }}
+              />
+            </View>
+
+            {/* 6. Recent Activity */}
+            <View style={[styles.fitnessCard, cardStyle, { marginBottom: d.sectionGap }]}>
+              <Text style={[typography.section, { color: d.textPrimary, fontWeight: '700', marginBottom: s.spacingMedium }]}>
+                Recent Activity
+              </Text>
+              {feedItems.length === 0 ? (
+                <Text style={[typography.caption, { color: d.textSecondary }]}>No recent activity yet.</Text>
+              ) : (
+                feedItems.slice(0, 8).map((item, index) => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.feedRow,
+                      {
+                        borderBottomWidth: index < Math.min(8, feedItems.length) - 1 ? 0.5 : 0,
+                        borderBottomColor: d.border,
+                        paddingVertical: 14,
+                      },
+                    ]}
+                  >
+                    <Ionicons name={feedItemIcon(item.type)} size={20} color={d.primary} style={{ marginRight: s.spacingSmall }} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[typography.caption, { color: d.textPrimary, fontWeight: '500' }]} numberOfLines={1}>
+                        {item.actorName} {feedItemSummary(item)}
+                      </Text>
+                      <Text style={[typography.caption, { color: d.textSecondary, fontSize: 11, marginTop: 2 }]}>
+                        {formatRelativeTime(item.createdAt)}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </Animated.View>
+        ) : (data.lastCompletedRoundRecap ?? recapFetched) ? (
+          <RoundRecapBlock
+            recap={data.lastCompletedRoundRecap ?? recapFetched!}
+            cardStyle={cardStyle}
+            d={d}
+            s={s}
+            typography={typography}
+            colors={colors}
+            styles={styles}
+            onViewFullStandings={() => {
+              const recap = data.lastCompletedRoundRecap ?? recapFetched!;
+              (navigation as any).getParent()?.navigate('LeaderboardTab', {
+                screen: 'RoundLeaderboard',
+                params: { roundId: recap.roundId, roundName: recap.roundName },
+              });
+            }}
+          />
         ) : (
-          <LinearGradient
-            colors={[colors.heroGradientStart, colors.heroGradientEnd] as [string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[
-              styles.welcomeBanner,
-              {
-                borderRadius: r.md,
-                paddingHorizontal: s.md,
-                paddingVertical: s.sm,
-                marginBottom: s.sm,
-                overflow: 'hidden',
-              },
-            ]}
-          >
-            <Text style={[typography.h3, { color: colors.textInverse, marginBottom: s.xxs, fontWeight: '800' }]} numberOfLines={1}>
+          <View style={[styles.fitnessCard, cardStyle, { marginBottom: d.sectionGap }]}>
+            <Text style={[typography.title, { color: d.textPrimary, fontWeight: '700', marginBottom: s.xs }]} numberOfLines={1}>
               {welcome.greeting}
             </Text>
-            <Text style={[typography.caption, { color: colors.heroTextMuted, fontWeight: '600' }]} numberOfLines={1}>
-              {welcome.contextHeadline}
-            </Text>
-            <Text style={[typography.bodySmall, { color: colors.heroTextMuted, fontWeight: '500', marginTop: s.xxs }]} numberOfLines={2}>
+            <Text style={[typography.body, { color: d.textSecondary, marginBottom: s.spacingSmall }]} numberOfLines={2}>
               {welcome.contextSubtext}
             </Text>
             {welcome.ctaLabel && (
               <TouchableOpacity
                 style={[
-                  styles.bannerCta,
+                  styles.heroCta,
                   {
-                    marginTop: s.sm,
-                    paddingVertical: s.xs,
-                    paddingHorizontal: s.sm,
-                    borderRadius: r.sm,
-                    borderWidth: 1.5,
-                    borderColor: colors.heroTextMuted,
-                    backgroundColor: colors.transparent,
+                    marginTop: s.spacingSmall,
+                    height: d.buttonHeight,
+                    paddingVertical: 0,
+                    paddingHorizontal: s.spacingXL,
+                    borderRadius: d.buttonRadius,
+                    backgroundColor: d.primary,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    ...d.buttonShadow,
                   },
                 ]}
                 onPress={handleBannerCta}
                 activeOpacity={0.85}
               >
-                <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '600' }]}>
-                  {welcome.ctaLabel}
-                </Text>
+                <Text style={[typography.section, { color: '#FFFFFF', fontWeight: '700', fontSize: 16 }]}>{welcome.ctaLabel}</Text>
               </TouchableOpacity>
             )}
-          </LinearGradient>
-        )}
-
-        {/* Your Team — prominent card with team name and rank (combined) */}
-        {data.teamRank && myTeamRankNum != null && (
-          <Card
-            style={[
-              styles.yourTeamCard,
-              {
-                padding: s.md,
-                marginBottom: s.sm,
-                backgroundColor: colors.card,
-                borderRadius: r.md,
-                borderWidth: 1,
-                borderColor: colors.border,
-                ...shadows.card,
-              },
-            ]}
-          >
-            <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: s.xs }]}>
-              Your Team
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.sm, marginBottom: s.xxs }}>
-              <Ionicons name="people" size={22} color={colors.primary} />
-              <Text style={[typography.h2, { color: colors.text, fontWeight: '800', fontSize: 20 }]} numberOfLines={1}>
-                {data.teamRank.teamName}
-              </Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.xs, flexWrap: 'wrap' }}>
-              {myTeamRankNum <= 3 ? (
-                <Text style={{ fontSize: 18 }}>{RANK_EMOJI[myTeamRankNum as 1 | 2 | 3]}</Text>
-              ) : null}
-              <Text style={[typography.body, { color: colors.textSecondary, fontWeight: '600' }]}>
-                Rank #{myTeamRankNum} in this round
-              </Text>
-            </View>
-            {gapToNext > 0 && (
-              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xs, fontWeight: '600' }]}>
-                {gapToNext} pts to next rank
-              </Text>
-            )}
-          </Card>
-        )}
-
-        {/* Daily Goal — ring + cap; "Daily cap reached" in success when met */}
-        {data.round.id && data.dailyCap > 0 && (
-          <View
-            style={[
-              styles.dailyProgressCard,
-              {
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: isDark ? colors.surfaceElevated : colors.primarySoft,
-                borderRadius: r.md,
-                padding: s.sm,
-                marginBottom: s.sm,
-                borderWidth: 1,
-                borderColor: colors.border,
-                ...shadows.card,
-              },
-            ]}
-          >
-            <CircularProgressRing
-              progress={Math.min(1, data.todayPoints / data.dailyCap)}
-              size={56}
-              strokeWidth={6}
-              animated
-              gradient
-              glow={false}
-            />
-            <View style={{ marginLeft: s.sm, flex: 1 }}>
-              <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>Daily Goal</Text>
-              <Text style={[typography.h3, { color: data.todayPoints >= data.dailyCap ? colors.success : colors.energy, fontWeight: '800' }]}>
-                {data.todayPoints} / {data.dailyCap}
-              </Text>
-              <Text
-                style={[
-                  typography.caption,
-                  {
-                    marginTop: s.xxs,
-                    fontWeight: '600',
-                    color: data.todayPoints >= data.dailyCap ? colors.success : colors.textSecondary,
-                  },
-                ]}
-              >
-                {data.todayPoints >= data.dailyCap ? 'Daily cap reached' : `${data.dailyCap - data.todayPoints} pts left today`}
-              </Text>
-            </View>
           </View>
         )}
-
-        <Animated.View style={[styles.main, { opacity: fadeAnim }]}>
-          {/* B. Personal Performance — metric cards with accent + watermark */}
-          <View style={[styles.statRow, { gap: s.xs, marginBottom: s.sm }]}>
-            <MetricCard
-              value={data.workoutCount}
-              label="Workouts"
-              accent="energy"
-              icon="fitness"
-              style={{ flex: 1 }}
-            />
-            <MetricCard
-              value={data.estimatedCalories}
-              label="Calories"
-              accent="primary"
-              icon="flash"
-              style={{ flex: 1 }}
-            />
-            <MetricCard
-              value={data.currentStreak}
-              label="Day streak"
-              accent="success"
-              icon="flame"
-              style={{ flex: 1 }}
-            />
-          </View>
-
-          {/* C. Weekly activity — grid with rounded bars, shadow, streak highlight */}
-          <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xs, fontWeight: '700' }]}>
-            Weekly Activity
-          </Text>
-          <View style={{ marginBottom: s.xs }}>
-            <WeeklyActivityGrid
-              data={weeklyActivity}
-              maxWorkouts={maxWeeklyWorkouts}
-              currentStreak={data.currentStreak}
-              animate
-            />
-          </View>
-
-          {/* D. Your Contribution — strong hierarchy: points, label, %, rank, progress bar */}
-          <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xs, fontWeight: '700' }]}>
-            Your contribution
-          </Text>
-          <Card style={[styles.contributionCard, { padding: s.md, marginBottom: s.sm, backgroundColor: isDark ? colors.surfaceElevated : colors.energySoft, borderRadius: r.md }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: s.xs }}>
-              <View>
-                <Text style={[typography.hero, { color: colors.energy, fontWeight: '800', letterSpacing: -0.5 }]}>
-                  {data.myRoundPoints.toLocaleString()}
-                </Text>
-                <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xxs, fontWeight: '600' }]}>
-                  Your points this round
-                </Text>
-              </View>
-              {data.teamRank && myTeamRankNum != null && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.xs }}>
-                  <Text style={[typography.section, { color: colors.competition, fontWeight: '800' }]}>
-                    Rank #{myTeamRankNum}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Text style={[typography.label, { color: colors.energy, marginTop: s.sm, fontWeight: '700' }]}>
-              {contributionPct.toFixed(0)}% of team total
-            </Text>
-            <View
-              style={[
-                styles.progressTrack,
-                {
-                  height: PROGRESS_BAR_HEIGHT,
-                  backgroundColor: colors.chartInactive,
-                  borderRadius: r.sm,
-                  overflow: 'hidden',
-                  marginTop: s.sm,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${Math.min(100, contributionPct)}%`,
-                    height: '100%',
-                    backgroundColor: colors.energy,
-                    borderRadius: r.sm,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xs, fontWeight: '500' }]}>
-              Team total <Text style={{ color: colors.energy, fontWeight: '700' }}>{data.myTeamTotal.toLocaleString()} pts</Text>
-            </Text>
-          </Card>
-
-          {/* Activity feed (FITCLUB_MASTER_SPEC §7.9) */}
-          <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xxs, fontWeight: '700' }]}>
-            Activity
-          </Text>
-          <View
-            style={[
-              styles.feedCard,
-              {
-                backgroundColor: colors.card,
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: r.md,
-                paddingVertical: s.xs,
-                marginBottom: s.sm,
-                ...shadows.card,
-              },
-            ]}
-          >
-            {feedItems.length === 0 ? (
-              <View style={{ padding: s.md, alignItems: 'center' }}>
-                <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>No recent activity yet.</Text>
-              </View>
-            ) : (
-              feedItems.map((item, index) => (
-                <View
-                  key={item.id}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: s.sm,
-                    paddingHorizontal: s.md,
-                    borderBottomWidth: index < feedItems.length - 1 ? 1 : 0,
-                    borderBottomColor: colors.borderLight,
-                  }}
-                >
-                  <View style={{ marginRight: s.sm }}>
-                    <Ionicons name={feedItemIcon(item.type)} size={20} color={colors.primary} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[typography.bodySmall, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>
-                      <Text style={{ fontWeight: '700' }}>{item.actorName}</Text>
-                      {' '}{feedItemSummary(item)}
-                    </Text>
-                    <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                      {formatRelativeTime(item.createdAt)}
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-
-          {/* Quick Log — last three workouts with one-tap repeat */}
-          {data.recentWorkouts.length > 0 && data.round.id && (
-            <>
-              <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xxs, fontWeight: '700' }]}>
-                Quick log
-              </Text>
-              <View style={{ gap: s.xs, marginBottom: s.sm }}>
-                {data.recentWorkouts.slice(0, 3).map((w, index) => (
-                  <TouchableOpacity
-                    key={w.id}
-                    activeOpacity={0.85}
-                    onPress={() => (navigation as any).navigate('WorkoutNew', { repeatLast: true, repeatWorkoutIndex: index })}
-                    style={[
-                      styles.quickLogCard,
-                      {
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: colors.card,
-                        borderRadius: r.md,
-                        padding: s.sm,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        ...shadows.card,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.quickLogIconWrap,
-                        {
-                          backgroundColor: colors.accentMuted,
-                          borderRadius: r.full,
-                          marginRight: s.sm,
-                        },
-                      ]}
-                    >
-                      <Ionicons name="repeat" size={20} color={colors.accent} />
-                    </View>
-                    <View style={styles.quickLogBody}>
-                      <Text style={[typography.body, { fontWeight: '700', color: colors.textPrimary }]} numberOfLines={1}>
-                        {w.activityName}
-                      </Text>
-                      <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xxs }]}>
-                        {formatRelativeTime(w.createdAt)} · +{w.points} pts
-                      </Text>
-                    </View>
-                    <Text style={[typography.label, { color: colors.primary, fontWeight: '700' }]}>Repeat</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
-
-          {/* F. Recent Activity */}
-          <Text style={[styles.sectionTitle, typography.caption, { color: colors.textPrimary, marginBottom: s.xxs, fontWeight: '700' }]}>
-            Recent activity
-          </Text>
-          <Card noPadding elevated style={{ backgroundColor: colors.card, borderRadius: r.md }}>
-            {data.recentWorkouts.length === 0 ? (
-              <View style={[styles.emptyActivityWrap, { paddingVertical: s.md, paddingHorizontal: s.sm }]}>
-                <Ionicons name="fitness-outline" size={24} color={colors.textSecondary} style={{ marginBottom: s.xs }} />
-                <Text style={[typography.bodySmall, { color: colors.textSecondary, textAlign: 'center' }]}>
-                  No workouts yet. Log one to start earning points.
-                </Text>
-              </View>
-            ) : (
-              data.recentWorkouts.map((w, index) => (
-                <View
-                  key={w.id}
-                  style={[
-                    styles.activityRow,
-                    {
-                      borderBottomWidth: index < data.recentWorkouts.length - 1 ? 1 : 0,
-                      borderBottomColor: colors.borderLight,
-                      padding: s.sm,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.activityIconWrap,
-                      {
-                        backgroundColor: colors.accentMuted,
-                        borderRadius: r.full,
-                        marginRight: s.sm,
-                      },
-                    ]}
-                  >
-                    <Ionicons name="fitness" size={16} color={colors.accent} />
-                  </View>
-                  <View style={styles.activityBody}>
-                    <Text style={[typography.body, { fontWeight: '600', color: colors.textPrimary }]}>{w.activityName}</Text>
-                    <Text style={[typography.caption, { color: colors.textSecondary, marginTop: s.xxs }]}>
-                      {w.userName ?? 'You'} · {formatRelativeTime(w.createdAt)}
-                    </Text>
-                  </View>
-                  <Text style={[typography.label, { color: colors.accent }]}>+{w.points}</Text>
-                </View>
-              ))
-            )}
-          </Card>
-        </Animated.View>
       </ScrollView>
 
       <ChallengeLaunchModal
@@ -914,23 +1076,24 @@ const styles = StyleSheet.create({
   emptyConceptCard: {},
   emptyConceptIconWrap: {},
   emptySecondaryBtn: {},
-  welcomeBanner: {},
-  bannerCta: { alignSelf: 'flex-start' },
+  heroCard: {},
+  heroRingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 160,
+  },
+  heroRingCenter: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroCta: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   main: {},
+  fitnessCard: {},
+  fitnessStatCard: {},
   statRow: { flexDirection: 'row' },
-  sectionTitle: {},
-  contributionCard: {},
-  feedCard: {},
-  progressTrack: {},
-  progressFill: {},
-  yourTeamCard: {},
-  activityRow: { flexDirection: 'row', alignItems: 'center' },
-  activityIconWrap: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  activityBody: { flex: 1, minWidth: 0 },
-  emptyActivityWrap: { alignItems: 'center' },
-  primaryBtn: { alignSelf: 'flex-start', alignItems: 'center', justifyContent: 'center' },
-  dailyProgressCard: {},
-  quickLogCard: {},
-  quickLogIconWrap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  quickLogBody: { flex: 1, minWidth: 0 },
+  feedRow: { flexDirection: 'row', alignItems: 'center' },
 });

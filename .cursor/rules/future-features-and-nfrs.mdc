@@ -1,0 +1,52 @@
+---
+description: Future features and NFRs — AI workout logging, activity pictures, storage cost, HA/DR, scalability. Consider when planning or implementing features.
+globs: backend/**/*, frontend/**/*, docs/**/*
+alwaysApply: false
+---
+
+# FitClub — Future features and NFRs to consider
+
+When planning new features, architecture, storage, or infrastructure, **always consider** the following. Do not implement them in MVP without explicit scope; use them as constraints and future roadmap.
+
+---
+
+## 1. AI for easier workout logging
+
+- **Goal**: Add AI capabilities so users can log workouts with less manual entry (e.g. natural language → structured workout).
+- **Providers**: Gemini and Claude. **Cost must be accounted for** (token usage, rate limits, billing).
+- **When designing**: Any workout-logging flow or API should be extensible for an AI layer (e.g. a “parse user input” step) without locking in a single provider. Prefer interfaces/abstractions so we can plug in Gemini vs Claude and track cost per request.
+
+---
+
+## 2. User and activity pictures (media)
+
+- **MVP**: **Do not** allow users to upload profile pictures or general user uploads. No picture upload in MVP.
+- **Post-MVP**: Allow users to upload **activity pictures** (e.g. workout photos). This will require:
+  - **Additional storage** (object/blob store, e.g. GCS or S3).
+  - Cost and retention policy for media.
+- **When designing**: Keep workout and user models/media assumptions consistent with “no user pictures in MVP; activity pictures later with dedicated storage.”
+
+---
+
+## 3. Database growth, cost, and scalability
+
+- **Reality**: Database storage can **grow exponentially** as users log more workouts. Every design must **account for cost** (storage, read/write, backups).
+- **NFRs**:
+  - **High Availability (HA)**: System must be designed for HA (e.g. managed DB, replication, failover).
+  - **Disaster Recovery (DR)**: Backups, RPO/RTO, and recovery procedures must be considered.
+  - **Scalability**: Design for horizontal/vertical scaling (DB, API, background jobs). Avoid single-point bottlenecks.
+  - **Performance**: Query patterns, indexing, and archival (e.g. old workout data) must support performance NFRs as data grows.
+- **When designing**: For any schema change, bulk feature, or new table, consider growth, indexing, backup size, and cost. Prefer patterns that scale (e.g. partitioning, archiving, read replicas) where appropriate.
+
+---
+
+## Summary
+
+| Area            | MVP / Now                         | Future / Consideration                                      |
+|-----------------|------------------------------------|-------------------------------------------------------------|
+| AI              | Not in scope                       | Gemini/Claude for workout entry; track cost                 |
+| User pictures   | Not allowed                        | —                                                           |
+| Activity pics   | Not in scope                       | Allowed post-MVP; needs blob storage + cost                 |
+| DB & infra      | —                                  | Cost, HA, DR, scalability, performance by design            |
+
+Reference this rule when: adding workout-related features, designing storage/APIs, estimating cost, or discussing architecture and NFRs.

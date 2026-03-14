@@ -54,7 +54,12 @@ export function Button({
           width: fullWidth ? '100%' : undefined,
           opacity: isDisabled ? 0.6 : 1,
           gap: spacing.sm,
-          ...(Platform.OS === 'ios' ? theme.shadows.sm : { elevation: 2 }),
+          // On Android, elevation + transparent background draws a white surface; skip elevation for outline.
+          ...(Platform.OS === 'ios'
+            ? theme.shadows.sm
+            : isOutline
+              ? { elevation: 0 }
+              : { elevation: 2 }),
         },
         style,
       ]}

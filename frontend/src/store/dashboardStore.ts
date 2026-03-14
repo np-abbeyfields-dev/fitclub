@@ -50,6 +50,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         ...dashboard,
         myRoundPoints: dashboard.myRoundPoints + payload.points,
         todayPoints: dashboard.todayPoints + payload.points,
+        teamPointsToday: dashboard.teamPointsToday + payload.points,
         workoutCount: dashboard.workoutCount + 1,
         recentWorkouts: [
           {

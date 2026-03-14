@@ -41,7 +41,7 @@ export function Input({
 
   if (leftIcon != null || rightIcon != null) {
     return (
-      <View style={[styles.row, { gap: spacing.sm }, containerStyle]} pointerEvents="box-none">
+      <View style={[styles.row, { gap: spacing.sm, paddingLeft: leftIcon != null ? spacing.sm : 0 }, containerStyle]} pointerEvents="box-none">
         {leftIcon}
         <TextInput
           {...props}

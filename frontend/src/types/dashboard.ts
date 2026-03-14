@@ -20,11 +20,27 @@ export type RecentWorkout = {
   userName?: string;
 };
 
+export type LastCompletedRoundRecap = {
+  roundId: string;
+  roundName: string;
+  winningTeamName: string;
+  winningTeamPoints: number;
+  topTeams: Array<{ rank: number; teamName: string; points: number }>;
+  myTeamName: string | null;
+  myTeamRank: number | null;
+  myTeamPoints: number | null;
+  myPoints: number;
+  myWorkoutCount: number;
+  contributionPercent: number;
+};
+
 export type DashboardData = {
   round: DashboardRound;
   teamRank: TeamRank | null;
   myTeamRank: number | null;
   todayPoints: number;
+  teamPointsToday: number;
+  topContributorsToday: Array<{ displayName: string; points: number }>;
   dailyCap: number;
   topTeams: TeamRank[];
   topTeamsAll: Array<{ rank: number; teamName: string; points: number }>;
@@ -35,4 +51,5 @@ export type DashboardData = {
   weeklyActivity: Array<{ date: string; points: number; workoutCount?: number }>;
   currentStreak: number;
   estimatedCalories: number;
+  lastCompletedRoundRecap?: LastCompletedRoundRecap | null;
 };

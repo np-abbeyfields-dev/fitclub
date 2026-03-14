@@ -57,6 +57,12 @@ export const clubService = {
   getById(clubId: string) {
     return request<{ success: boolean; data: ClubWithRole }>(`/clubs/${clubId}`);
   },
+  update(clubId: string, data: { name: string }) {
+    return request<{ success: boolean; data: { id: string; name: string; createdAt: string } }>(`/clubs/${clubId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
   listMembers(clubId: string, params?: { search?: string; activeRoundId?: string }) {
     const sp = new URLSearchParams();
     if (params?.search) sp.set('search', params.search);
@@ -74,16 +80,26 @@ export const clubService = {
     return request<{ success: boolean }>(`/clubs/${clubId}/members/${userId}`, { method: 'DELETE' });
   },
 
+  /** Any club member. Sends invite email; backend includes invite code in email. */
+  inviteByEmail(clubId: string, email: string) {
+    return request<{ success: boolean; message?: string }>(`/clubs/${clubId}/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+  },
+
   getDashboard(clubId: string) {
     return request<{
       success: boolean;
       data: {
-        activeRound: { id: string; name: string; endDate: string; daysLeft: number } | null;
+        activeRound: { id: string; name: string; startDate?: string; endDate: string; daysLeft: number } | null;
         membersCount: number;
         teams: Array<{ id: string; name: string; points: number }>;
         topTeams: Array<{ rank: number; teamName: string; points: number }>;
         recentWorkouts: Array<{ id: string; activityName: string; points: number; createdAt: string; userName: string }>;
         todayPoints: number;
+        teamPointsToday: number;
+        topContributorsToday: Array<{ displayName: string; points: number }>;
         dailyCap: number;
         myTeamRank: number | null;
         myTeamName: string | null;
@@ -93,6 +109,19 @@ export const clubService = {
         weeklyActivity: Array<{ date: string; points: number; workoutCount?: number }>;
         currentStreak: number;
         estimatedCalories: number;
+        lastCompletedRoundRecap?: {
+          roundId: string;
+          roundName: string;
+          winningTeamName: string;
+          winningTeamPoints: number;
+          topTeams: Array<{ rank: number; teamName: string; points: number }>;
+          myTeamName: string | null;
+          myTeamRank: number | null;
+          myTeamPoints: number | null;
+          myPoints: number;
+          myWorkoutCount: number;
+          contributionPercent: number;
+        } | null;
       };
     }>(`/clubs/${clubId}/dashboard`);
   },

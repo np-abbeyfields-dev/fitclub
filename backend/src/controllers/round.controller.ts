@@ -1,7 +1,8 @@
 import { Response } from 'express';
 import { RoundService } from '../services/round.service';
 import { LeaderboardService } from '../services/leaderboard.service';
-import { logWorkout } from '../services/workout.service';
+import { logWorkout, listWorkoutsForUserInRound } from '../services/workout.service';
+import { getDraftState, makeDraftPick } from '../services/draft.service';
 import { AuthRequest, ApiResponse } from '../types';
 
 function param(req: AuthRequest, key: string): string | undefined {
@@ -113,6 +114,7 @@ export class RoundController {
     if (body.endDate !== undefined) data.endDate = body.endDate;
     if (body.scoringConfig !== undefined) data.scoringConfig = body.scoringConfig;
     if (body.teamSize !== undefined) data.teamSize = body.teamSize;
+    if (body.scheduledStartAt !== undefined) data.scheduledStartAt = body.scheduledStartAt;
     const round = await RoundService.updateRound(roundId, userId, data as any);
     res.json({ success: true, data: round, message: 'Round updated.' } as ApiResponse);
   }
@@ -175,5 +177,49 @@ export class RoundController {
       loggedAt: body.loggedAt,
     });
     res.status(201).json({ success: true, data: { id: result.id, points: result.points } } as ApiResponse);
+  }
+
+  /** GET /rounds/:roundId/draft-state — snake draft: whose turn, teams, available members with previous-round stats. */
+  static async getDraftState(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const roundId = param(req, 'roundId');
+    if (!roundId) {
+      res.status(400).json({ success: false, error: 'Round ID required.' } as ApiResponse);
+      return;
+    }
+    const data = await getDraftState(roundId, userId);
+    res.json({ success: true, data } as ApiResponse);
+  }
+
+  /** GET /rounds/:roundId/users/:userId/workouts — list workouts for a member in the round (same-club only). */
+  static async listMemberWorkouts(req: AuthRequest, res: Response): Promise<void> {
+    const callerUserId = req.user!.id;
+    const roundId = param(req, 'roundId');
+    const targetUserId = param(req, 'userId');
+    if (!roundId || !targetUserId) {
+      res.status(400).json({ success: false, error: 'Round ID and user ID required.' } as ApiResponse);
+      return;
+    }
+    const limit = req.query?.limit != null ? Math.min(Number(req.query.limit), 100) : 50;
+    const data = await listWorkoutsForUserInRound(roundId, targetUserId, callerUserId, limit);
+    res.json({ success: true, data } as ApiResponse);
+  }
+
+  /** POST /rounds/:roundId/draft-pick — snake draft: team on the clock picks a member. Body: { teamId, userId }. */
+  static async makeDraftPick(req: AuthRequest, res: Response): Promise<void> {
+    const callerUserId = req.user!.id;
+    const roundId = param(req, 'roundId');
+    if (!roundId) {
+      res.status(400).json({ success: false, error: 'Round ID required.' } as ApiResponse);
+      return;
+    }
+    const teamId = typeof req.body?.teamId === 'string' ? req.body.teamId.trim() : '';
+    const userIdToAdd = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+    if (!teamId || !userIdToAdd) {
+      res.status(400).json({ success: false, error: 'teamId and userId are required.' } as ApiResponse);
+      return;
+    }
+    const { membership } = await makeDraftPick(roundId, teamId, userIdToAdd, callerUserId);
+    res.status(201).json({ success: true, data: membership, message: 'Member picked.' } as ApiResponse);
   }
 }

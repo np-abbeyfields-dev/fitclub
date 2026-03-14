@@ -15,11 +15,9 @@ export const spacing = {
   xxxl: 64,
 };
 
-/** Radius: theme/radius + legacy keys (xl, full) for backward compatibility */
+/** Radius: theme/radius (includes xl, full) */
 export const radius = {
   ...radiusScale,
-  xl: 20,
-  full: 9999,
 };
 
 export const typography = {

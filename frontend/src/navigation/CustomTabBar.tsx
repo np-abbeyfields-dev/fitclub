@@ -16,25 +16,34 @@ const TAB_ICONS: Record<string, { filled: keyof typeof Ionicons.glyphMap; outlin
   HomeTab: { filled: 'home', outline: 'home-outline' },
   LeaderboardTab: { filled: 'trophy', outline: 'trophy-outline' },
   TeamTab: { filled: 'people', outline: 'people-outline' },
-  ProfileTab: { filled: 'person', outline: 'person-outline' },
+  ChallengesTab: { filled: 'medal', outline: 'medal-outline' },
 };
 
 const TAB_LABELS: Record<string, string> = {
   HomeTab: 'Home',
   LeaderboardTab: 'Leaderboard',
   TeamTab: 'Team',
-  ProfileTab: 'Profile',
+  ChallengesTab: 'Challenges',
 };
 
 const FAB_SIZE = 56;
 const FAB_FLOAT_OFFSET = 20;
 const PRESS_SCALE = 0.92;
 
+const TAB_BAR_DARK = {
+  background: '#0F172A',
+  inactiveIcon: '#64748B',
+  activeAccent: '#FF6B35',
+};
+
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { colors, spacing: s, radius: r } = theme;
+  const { colors, spacing: s, radius: r, isDark } = theme;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const tabBarBg = isDark ? TAB_BAR_DARK.background : colors.card;
+  const inactiveColor = isDark ? TAB_BAR_DARK.inactiveIcon : colors.textSecondary;
+  const activeColor = isDark ? TAB_BAR_DARK.activeAccent : colors.primary;
 
   const onFABPressIn = () => {
     Animated.spring(scaleAnim, {
@@ -55,7 +64,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
   };
 
   const onFABPress = () => {
-    navigation.getParent()?.navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'WorkoutNew' } });
+    navigation.navigate('HomeTab', { screen: 'WorkoutNew' });
   };
 
   const tabBarHeight = 64 + insets.bottom;
@@ -106,7 +115,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             <Ionicons
               name={isFocused ? icons.filled : icons.outline}
               size={22}
-              color={isFocused ? colors.primary : colors.textSecondary}
+              color={isFocused ? activeColor : inactiveColor}
             />
             {badge != null && (
               <View style={[styles.badge, { backgroundColor: colors.error }]}>
@@ -120,7 +129,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             style={[
               styles.label,
               {
-                color: isFocused ? colors.primary : colors.textSecondary,
+                color: isFocused ? activeColor : inactiveColor,
                 fontWeight: isFocused ? '800' : '600',
               },
             ]}
@@ -138,7 +147,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
       style={[
         styles.container,
         {
-          backgroundColor: colors.card,
+          backgroundColor: tabBarBg,
           borderTopColor: colors.border,
           borderTopWidth: 1,
           paddingBottom: insets.bottom,
@@ -180,7 +189,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
               <Ionicons name="add" size={30} color={colors.textInverse} />
             </Animated.View>
           </TouchableOpacity>
-          <Text style={[styles.fabLabel, { color: colors.textSecondary, fontWeight: '700' }]}>Log</Text>
+          <Text style={[styles.fabLabel, { color: inactiveColor, fontWeight: '700' }]}>Log</Text>
         </View>
 
         <View style={styles.half}>{rightTabs.map((r, i) => renderTab(r, i + 2))}</View>

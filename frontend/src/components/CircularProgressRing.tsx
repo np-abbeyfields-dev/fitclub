@@ -15,10 +15,14 @@ type CircularProgressRingProps = {
   strokeWidth?: number;
   /** Animate progress on mount and when progress changes */
   animated?: boolean;
-  /** Show gradient stroke (accent → primary) */
+  /** Show gradient stroke (accent → primary). Ignored if progressColor is set. */
   gradient?: boolean;
   /** Show subtle glow behind progress stroke */
   glow?: boolean;
+  /** Optional solid progress color (e.g. for dark fitness layout). When set, gradient is not used. */
+  progressColor?: string;
+  /** Optional track (inactive) color */
+  trackColor?: string;
 };
 
 export function CircularProgressRing({
@@ -28,9 +32,13 @@ export function CircularProgressRing({
   animated = true,
   gradient = true,
   glow = true,
+  progressColor: progressColorOverride,
+  trackColor: trackColorOverride,
 }: CircularProgressRingProps) {
   const theme = useTheme();
   const { colors } = theme;
+  const progressStrokeColor = progressColorOverride ?? (gradient ? undefined : colors.energy);
+  const trackColor = trackColorOverride ?? colors.chartInactive;
   const [animatedProgress, setAnimatedProgress] = useState(animated ? 0 : progress);
   const animValue = useRef(new Animated.Value(animated ? 0 : progress)).current;
   const currentRef = useRef(animated ? 0 : progress);
@@ -67,7 +75,8 @@ export function CircularProgressRing({
   const circumference = 2 * Math.PI * r;
   const strokeDashoffset = circumference * (1 - animatedProgress);
 
-  const progressStroke = gradient ? `url(#${GRADIENT_ID})` : colors.energy;
+  const progressStroke = progressColorOverride ?? (gradient ? `url(#${GRADIENT_ID})` : colors.energy);
+  const glowStroke = progressColorOverride ?? colors.energy;
 
   return (
     <View style={[styles.wrap, { width: size, height: size }]}>
@@ -83,7 +92,7 @@ export function CircularProgressRing({
           cx={cx}
           cy={cx}
           r={r}
-          stroke={colors.chartInactive}
+          stroke={trackColor}
           strokeWidth={strokeWidth}
           fill={colors.transparent}
         />
@@ -94,7 +103,7 @@ export function CircularProgressRing({
               cx={cx}
               cy={cx}
               r={r}
-              stroke={colors.energy}
+              stroke={glowStroke}
               strokeWidth={strokeWidth + GLOW_STROKE_BONUS}
               fill={colors.transparent}
               strokeDasharray={`${circumference} ${circumference}`}

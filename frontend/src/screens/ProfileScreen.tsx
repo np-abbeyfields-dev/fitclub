@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, useThemeContext } from '../theme';
 import { useAuthStore } from '../store/authStore';
@@ -88,6 +89,7 @@ export default function ProfileScreen() {
   const notificationsEnabled = useNotificationsStore((s) => s.enabled);
   const setNotificationsEnabled = useNotificationsStore((s) => s.setEnabled);
   const hydrateNotifications = useNotificationsStore((s) => s.hydrate);
+  const insets = useSafeAreaInsets();
   const { colors, spacing, radius, typography } = theme;
 
   const [refreshing, setRefreshing] = useState(false);
@@ -148,16 +150,25 @@ export default function ProfileScreen() {
     setRefreshing(false);
   }, [refreshClubs, loadPastRounds]);
 
-  const onSettings = () => (navigation as any).getParent()?.navigate('Settings');
+  const tabNav = (navigation as any).getParent?.() ?? navigation;
+  const onSettings = () => (navigation as any).navigate('Settings');
   const handleLogout = async () => await logout();
+  const goBack = () => (navigation as any).goBack?.();
 
   const initial = (user?.displayName || user?.email || '?').charAt(0).toUpperCase();
   const isDark = preference === 'dark';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xs }]}>
-        <Text style={[typography.h1, { color: colors.text, fontWeight: '800' }]}>Profile</Text>
+      <View style={[styles.header, { paddingHorizontal: spacing.md, paddingTop: insets.top + spacing.md, paddingBottom: spacing.xs }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          {typeof (navigation as any).goBack === 'function' && (
+            <TouchableOpacity onPress={goBack} style={{ marginRight: spacing.sm, padding: spacing.xxs }} hitSlop={spacing.sm} activeOpacity={0.7}>
+              <Ionicons name="chevron-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+          )}
+          <Text style={[typography.h1, { color: colors.text, fontWeight: '800', flex: 1 }]}>Profile</Text>
+        </View>
         <TouchableOpacity onPress={onSettings} style={{ padding: spacing.xxs }} hitSlop={spacing.sm} activeOpacity={0.7}>
           <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
@@ -196,7 +207,7 @@ export default function ProfileScreen() {
           <View style={[styles.clubActions, { gap: spacing.sm, marginBottom: spacing.md }]}>
             <TouchableOpacity
               style={[styles.outlineBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border }]}
-              onPress={() => (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'JoinClub' } })}
+              onPress={() => (navigation as any).navigate('JoinClub')}
               activeOpacity={0.7}
             >
               <Ionicons name="add" size={20} color={colors.primary} />
@@ -204,7 +215,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.primaryBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.sm, backgroundColor: colors.primary }]}
-              onPress={() => (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'CreateClub' } })}
+              onPress={() => (navigation as any).navigate('CreateClub')}
               activeOpacity={0.7}
             >
               <Ionicons name="add" size={20} color={colors.textInverse} />
@@ -263,7 +274,7 @@ export default function ProfileScreen() {
                       <TouchableOpacity
                         onPress={() => {
                           setSelectedClub(club);
-                          (navigation as any).getParent()?.navigate('ClubInfo');
+                          (navigation as any).navigate('ClubInfo');
                         }}
                         style={{ padding: spacing.xs, marginTop: -spacing.xs, marginRight: -spacing.xs }}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -279,7 +290,7 @@ export default function ProfileScreen() {
             <View style={[styles.clubActions, { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }]}>
               <TouchableOpacity
                 style={[styles.outlineBtn, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border }]}
-                onPress={() => (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'JoinClub' } })}
+                onPress={() => (navigation as any).navigate('JoinClub')}
                 activeOpacity={0.7}
               >
                 <Ionicons name="add" size={20} color={colors.primary} />
@@ -287,7 +298,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.primaryBtn, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.primary }]}
-                onPress={() => (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'CreateClub' } })}
+                onPress={() => (navigation as any).navigate('CreateClub')}
                 activeOpacity={0.7}
               >
                 <Ionicons name="add" size={20} color={colors.textInverse} />
@@ -302,10 +313,10 @@ export default function ProfileScreen() {
           <>
             <SectionHeader title="Admin tools" style={{ marginBottom: spacing.xs }} />
             <View style={{ gap: spacing.xs, marginBottom: spacing.md }}>
-              <Row label="Create challenge round" onPress={() => (navigation as any).getParent()?.navigate('Rounds')} />
-              <Row label="Manage members" onPress={() => (navigation as any).getParent()?.navigate('Members')} />
-              <Row label="Manage teams" onPress={() => (navigation as any).getParent()?.navigate('TeamsManagement')} />
-              <Row label="Edit club info" onPress={() => (navigation as any).getParent()?.navigate('ClubInfo')} />
+              <Row label="Create challenge round" onPress={() => (navigation as any).navigate('Rounds')} />
+              <Row label="Manage members" onPress={() => (navigation as any).navigate('Members')} />
+              <Row label="Manage teams" onPress={() => (navigation as any).navigate('TeamsManagement')} />
+              <Row label="Edit club info" onPress={() => (navigation as any).navigate('ClubInfo')} />
             </View>
           </>
         )}
@@ -325,7 +336,7 @@ export default function ProfileScreen() {
             {pastRounds.map((row) => (
               <TouchableOpacity
                 key={row.roundId}
-                onPress={() => (navigation as any).getParent()?.navigate('RoundSummary', { roundId: row.roundId, roundName: row.roundName })}
+                onPress={() => (tabNav as any).navigate('LeaderboardTab', { screen: 'RoundLeaderboard', params: { roundId: row.roundId, roundName: row.roundName } })}
                 style={[
                   styles.row,
                   {
@@ -352,7 +363,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             ))}
             <TouchableOpacity
-              onPress={() => (navigation as any).getParent()?.navigate('PastRounds')}
+              onPress={() => (tabNav as any).navigate('LeaderboardTab', { screen: 'PastRounds' })}
               style={[styles.outlineBtn, { paddingVertical: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, alignItems: 'center', marginTop: spacing.xs }]}
               activeOpacity={0.7}
             >

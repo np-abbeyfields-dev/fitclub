@@ -16,12 +16,14 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  ClubMemberships   ClubMembership[]
-  TeamMemberships   TeamMembership[]
-  TeamsCreated      Team[]           @relation("TeamCreatedBy")
-  Workouts          Workout[]
-  ScoreLedgers      ScoreLedger[]
-  PushTokens        PushToken[]
+  ClubMemberships        ClubMembership[]
+  TeamMemberships        TeamMembership[]
+  TeamsCreated           Team[]                 @relation("TeamCreatedBy")
+  Workouts               Workout[]
+  ScoreLedgers           ScoreLedger[]
+  PushTokens              PushToken[]
+  CustomChallengesCreated CustomChallenge[]      @relation("CustomChallengeCreatedBy")
+  CustomChallengeCompletions CustomChallengeCompletion[]
 
   @@index([email])
 }
@@ -46,8 +48,11 @@ model Club {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  Memberships ClubMembership[]
-  Rounds      Round[]
+  Memberships         ClubMembership[]
+  Rounds              Round[]
+  ChallengesCreated   Challenge[]             @relation("ChallengeCreatedBy")
+  ChallengeParticipations ChallengeParticipant[]
+  CustomChallenges    CustomChallenge[]
 
   @@index([inviteCode])
 }
@@ -64,6 +69,13 @@ enum RoundStatus {
   active
   completed
   @@map("round_status")
+}
+
+enum ChallengeStatus {
+  draft
+  active
+  completed
+  @@map("challenge_status")
 }
 
 // A user can be part of multiple clubs (multiple ClubMembership rows per userId).
@@ -85,27 +97,112 @@ model ClubMembership {
 
 // One club → one active round. DB: partial unique index Round_clubId_status_active_key on (clubId) WHERE status = 'active'.
 model Round {
-  id              String      @id @default(uuid())
-  clubId          String
-  name            String
-  startDate       DateTime
-  endDate         DateTime
-  scoringConfig   Json        // RoundScoringConfig per FITCLUB_SCORING_ENGINE_SPEC
-  teamSize        Int?
-  locked          Boolean     @default(false)
-  status          RoundStatus @default(draft)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                String      @id @default(uuid())
+  clubId            String
+  name              String
+  startDate         DateTime
+  endDate           DateTime
+  scoringConfig     Json        // RoundScoringConfig per FITCLUB_SCORING_ENGINE_SPEC
+  teamSize          Int?
+  locked            Boolean     @default(false)
+  status            RoundStatus @default(draft)
+  scheduledStartAt  DateTime?   @map("scheduled_start_at") // When set, batch job sets status to active at this time
+  draftPickIndex    Int         @default(0) @map("draft_pick_index") // Snake draft: current global pick (0-based); incremented after each pick
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
   Club  Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
   Teams Team[]
   Workouts     Workout[]
   ScoreLedgers ScoreLedger[]
   TeamMemberships TeamMembership[]
+  ChallengeParticipation ChallengeParticipant? @relation("RoundChallengeParticipation")
+  CustomChallengeCompletions CustomChallengeCompletion[]
+  CustomChallenges CustomChallenge[]
 
   @@index([clubId])
   @@index([startDate, endDate])
   @@index([clubId, status])
+}
+
+// Inter-club challenge: links two (or N) clubs; each club designates one round for the challenge.
+model Challenge {
+  id              String          @id @default(uuid())
+  name            String
+  startDate       DateTime
+  endDate         DateTime
+  status          ChallengeStatus @default(draft)
+  createdByClubId String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  CreatedByClub Club?                  @relation("ChallengeCreatedBy", fields: [createdByClubId], references: [id], onDelete: SetNull)
+  Participants  ChallengeParticipant[]
+
+  @@index([createdByClubId])
+  @@index([status])
+}
+
+model ChallengeParticipant {
+  id          String   @id @default(uuid())
+  challengeId String
+  clubId      String
+  roundId     String?  // round this club uses for this challenge (set when club assigns a round)
+  joinedAt    DateTime @default(now())
+
+  Challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  Club      Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  Round     Round?    @relation("RoundChallengeParticipation", fields: [roundId], references: [id], onDelete: SetNull)
+
+  @@unique([challengeId, clubId])
+  @@unique([roundId])  // a round can be used in at most one challenge
+  @@index([challengeId])
+  @@index([clubId])
+}
+
+// Round-scoped habit-style challenges (e.g. "Drink 6 glasses of water"). One round has many; each challenge ends with the round.
+model CustomChallenge {
+  id              String   @id @default(uuid())
+  roundId         String   @map("round_id")
+  clubId          String   @map("club_id")
+  name            String
+  description     String?
+  icon            String?  // e.g. Ionicons name
+  pointsAwarded   Int      @map("points_awarded")
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  Round   Round   @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  Club    Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  CreatedByUser User @relation("CustomChallengeCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  Completions CustomChallengeCompletion[]
+
+  @@index([roundId])
+  @@index([clubId])
+  @@index([createdByUserId])
+  @@map("custom_challenge")
+}
+
+// One completion per user per custom challenge per calendar day; points apply to the round at completion time.
+model CustomChallengeCompletion {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  customChallengeId String   @map("custom_challenge_id")
+  roundId           String   @map("round_id")
+  completionDate    String   @map("completion_date") // YYYY-MM-DD (UTC calendar day)
+  pointsAwarded     Int      @map("points_awarded")
+  createdAt         DateTime @default(now())
+
+  User            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  CustomChallenge CustomChallenge @relation(fields: [customChallengeId], references: [id], onDelete: Cascade)
+  Round           Round           @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([customChallengeId, userId, completionDate])
+  @@index([roundId])
+  @@index([userId])
+  @@index([customChallengeId])
+  @@map("custom_challenge_completion")
 }
 
 model Team {
@@ -158,6 +255,8 @@ model Workout {
   notes            String?
   loggedAt         DateTime
   createdAt        DateTime @default(now())
+  /// BETA_MMR: Temporary. Dedupe MMR imports; remove when dropping MMR sync.
+  mmrWorkoutId     String?   @unique
 
   User          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   Round         Round         @relation(fields: [roundId], references: [id], onDelete: Cascade)

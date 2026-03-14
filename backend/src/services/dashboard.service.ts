@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { ClubService } from './club.service';
+import { CustomChallengeService } from './customChallenge.service';
 
 function getDailyCap(round: { scoringConfig: unknown }): number {
   try {
@@ -18,8 +19,15 @@ export class DashboardService {
   static async getDashboard(clubId: string, userId: string) {
     await ClubService.ensureMember(userId, clubId);
 
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     const rounds = await prisma.round.findMany({
-      where: { clubId, status: 'active' },
+      where: {
+        clubId,
+        status: 'active',
+        endDate: { gte: startOfToday },
+      },
       take: 1,
       orderBy: { startDate: 'desc' },
     });
@@ -28,6 +36,101 @@ export class DashboardService {
     const membersCount = await prisma.clubMembership.count({ where: { clubId } });
 
     if (!activeRound) {
+      const lastCompleted = await prisma.round.findFirst({
+        where: {
+          clubId,
+          OR: [
+            { status: 'completed' },
+            { status: 'active', endDate: { lt: startOfToday } },
+          ],
+        },
+        orderBy: { endDate: 'desc' },
+      });
+      let lastCompletedRoundRecap: {
+        roundId: string;
+        roundName: string;
+        winningTeamName: string;
+        winningTeamPoints: number;
+        topTeams: Array<{ rank: number; teamName: string; points: number }>;
+        myTeamName: string | null;
+        myTeamRank: number | null;
+        myTeamPoints: number | null;
+        myPoints: number;
+        myWorkoutCount: number;
+        contributionPercent: number;
+      } | null = null;
+
+      if (lastCompleted) {
+        const roundId = lastCompleted.id;
+        const workoutScores = await prisma.scoreLedger.groupBy({
+          by: ['userId'],
+          where: { roundId },
+          _sum: { finalAwardedPoints: true },
+        });
+        const customPointsMap = await CustomChallengeService.sumPointsByUserForRound(roundId);
+        const userPointsMap = new Map<string, number>();
+        for (const s of workoutScores) {
+          userPointsMap.set(s.userId, (s._sum.finalAwardedPoints ?? 0) + (customPointsMap.get(s.userId) ?? 0));
+        }
+        for (const [uid, pts] of customPointsMap) {
+          if (!userPointsMap.has(uid)) userPointsMap.set(uid, pts);
+        }
+
+        const teams = await prisma.team.findMany({
+          where: { roundId },
+          include: { Memberships: true },
+        });
+        const teamTotals = teams
+          .map((t) => ({
+            teamId: t.id,
+            teamName: t.name,
+            total: t.Memberships.reduce((sum, m) => sum + (userPointsMap.get(m.userId) ?? 0), 0),
+          }))
+          .sort((a, b) => b.total - a.total);
+
+        const topTeams = teamTotals.slice(0, 3).map((t, i) => ({
+          rank: i + 1,
+          teamName: t.teamName,
+          points: Math.round(t.total),
+        }));
+        const winner = teamTotals[0];
+        const myMembership = await prisma.teamMembership.findUnique({
+          where: { userId_roundId: { userId, roundId } },
+          include: { Team: true },
+        });
+        let myTeamName: string | null = null;
+        let myTeamRank: number | null = null;
+        let myTeamPoints: number | null = null;
+        if (myMembership) {
+          myTeamName = myMembership.Team.name;
+          const idx = teamTotals.findIndex((t) => t.teamId === myMembership.teamId);
+          if (idx >= 0) {
+            myTeamRank = idx + 1;
+            myTeamPoints = Math.round(teamTotals[idx].total);
+          }
+        }
+        const myPoints = Math.round(userPointsMap.get(userId) ?? 0);
+        const myWorkoutCount = await prisma.workout.count({
+          where: { userId, roundId },
+        });
+        const contributionPercent =
+          myTeamPoints != null && myTeamPoints > 0 ? Math.round((myPoints / myTeamPoints) * 100) : 0;
+
+        lastCompletedRoundRecap = {
+          roundId,
+          roundName: lastCompleted.name,
+          winningTeamName: winner?.teamName ?? '—',
+          winningTeamPoints: winner ? Math.round(winner.total) : 0,
+          topTeams,
+          myTeamName,
+          myTeamRank,
+          myTeamPoints,
+          myPoints,
+          myWorkoutCount,
+          contributionPercent,
+        };
+      }
+
       return {
         activeRound: null,
         membersCount,
@@ -35,6 +138,8 @@ export class DashboardService {
         topTeams: [],
         recentWorkouts: [],
         todayPoints: 0,
+        teamPointsToday: 0,
+        topContributorsToday: [],
         dailyCap: 100,
         myTeamRank: null,
         myTeamName: null,
@@ -44,6 +149,7 @@ export class DashboardService {
         weeklyActivity: [],
         currentStreak: 0,
         estimatedCalories: 0,
+        lastCompletedRoundRecap,
       };
     }
 
@@ -59,7 +165,14 @@ export class DashboardService {
       where: { roundId: activeRound.id },
       _sum: { finalAwardedPoints: true },
     });
-    const userPointsMap = new Map(scoreByUser.map((s) => [s.userId, s._sum.finalAwardedPoints ?? 0]));
+    const customPointsMap = await CustomChallengeService.sumPointsByUserForRound(activeRound.id);
+    const userPointsMap = new Map<string, number>();
+    for (const s of scoreByUser) {
+      userPointsMap.set(s.userId, (s._sum.finalAwardedPoints ?? 0) + (customPointsMap.get(s.userId) ?? 0));
+    }
+    for (const [uid, pts] of customPointsMap) {
+      if (!userPointsMap.has(uid)) userPointsMap.set(uid, pts);
+    }
 
     const teamSums = teams.map((t) => {
       const total = t.Memberships.reduce((sum, m) => sum + (userPointsMap.get(m.userId) ?? 0), 0);
@@ -92,7 +205,87 @@ export class DashboardService {
       },
       _sum: { finalAwardedPoints: true },
     });
-    const todayPoints = todayScores._sum.finalAwardedPoints ?? 0;
+    const todayKey = todayStart.toISOString().slice(0, 10);
+    const todayCustomCompletions = await prisma.customChallengeCompletion.aggregate({
+      where: {
+        userId,
+        roundId: activeRound.id,
+        completionDate: todayKey,
+      },
+      _sum: { pointsAwarded: true },
+    });
+    const todayPoints = (todayScores._sum.finalAwardedPoints ?? 0) + (todayCustomCompletions._sum.pointsAwarded ?? 0);
+
+    let teamPointsToday = 0;
+    let teamUserIds: string[] = [];
+    if (myTeamId) {
+      const teamMemberRows = await prisma.teamMembership.findMany({
+        where: { roundId: activeRound.id, teamId: myTeamId },
+        select: { userId: true },
+      });
+      teamUserIds = teamMemberRows.map((m) => m.userId);
+      if (teamUserIds.length > 0) {
+        const teamTodayLedger = await prisma.scoreLedger.aggregate({
+          where: {
+            roundId: activeRound.id,
+            createdAt: { gte: todayStart, lt: todayEnd },
+            userId: { in: teamUserIds },
+          },
+          _sum: { finalAwardedPoints: true },
+        });
+        const teamTodayCustom = await prisma.customChallengeCompletion.aggregate({
+          where: {
+            roundId: activeRound.id,
+            completionDate: todayKey,
+            userId: { in: teamUserIds },
+          },
+          _sum: { pointsAwarded: true },
+        });
+        teamPointsToday =
+          (teamTodayLedger._sum.finalAwardedPoints ?? 0) + (teamTodayCustom._sum.pointsAwarded ?? 0);
+      }
+    }
+
+    let topContributorsToday: Array<{ displayName: string; points: number }> = [];
+    if (myTeamId && teamUserIds.length > 0) {
+      const todayLedgerByUser = await prisma.scoreLedger.groupBy({
+        by: ['userId'],
+        where: {
+          roundId: activeRound.id,
+          createdAt: { gte: todayStart, lt: todayEnd },
+          userId: { in: teamUserIds },
+        },
+        _sum: { finalAwardedPoints: true },
+      });
+      const todayCustomByUser = await prisma.customChallengeCompletion.findMany({
+        where: {
+          roundId: activeRound.id,
+          completionDate: todayKey,
+          userId: { in: teamUserIds },
+        },
+        select: { userId: true, pointsAwarded: true },
+      });
+      const pointsByUser = new Map<string, number>();
+      for (const row of todayLedgerByUser) {
+        pointsByUser.set(row.userId, (row._sum.finalAwardedPoints ?? 0) + (pointsByUser.get(row.userId) ?? 0));
+      }
+      for (const row of todayCustomByUser) {
+        pointsByUser.set(row.userId, (pointsByUser.get(row.userId) ?? 0) + row.pointsAwarded);
+      }
+      const users = await prisma.user.findMany({
+        where: { id: { in: teamUserIds } },
+        select: { id: true, displayName: true },
+      });
+      const nameMap = new Map(users.map((u) => [u.id, u.displayName ?? 'Unknown']));
+      topContributorsToday = Array.from(pointsByUser.entries())
+        .map(([uid, pts]) => ({
+          displayName: uid === userId ? 'You' : nameMap.get(uid) ?? 'Unknown',
+          points: Math.round(pts),
+        }))
+        .filter((c) => c.points > 0)
+        .sort((a, b) => b.points - a.points)
+        .slice(0, 10);
+    }
 
     const recentWorkouts = await prisma.workout.findMany({
       where: { roundId: activeRound.id },
@@ -131,6 +324,17 @@ export class DashboardService {
     for (const row of ledgerRows) {
       const key = new Date(row.createdAt).toISOString().slice(0, 10);
       pointsByDay.set(key, (pointsByDay.get(key) ?? 0) + row.finalAwardedPoints);
+    }
+    const customCompletionsLast7 = await prisma.customChallengeCompletion.findMany({
+      where: {
+        userId,
+        roundId: activeRound.id,
+        completionDate: { gte: sevenDaysAgo.toISOString().slice(0, 10) },
+      },
+      select: { completionDate: true, pointsAwarded: true },
+    });
+    for (const c of customCompletionsLast7) {
+      pointsByDay.set(c.completionDate, (pointsByDay.get(c.completionDate) ?? 0) + c.pointsAwarded);
     }
     const workoutsLast7Days = await prisma.workout.findMany({
       where: {
@@ -202,6 +406,8 @@ export class DashboardService {
         userName: w.User.id === userId ? 'You' : w.User.displayName,
       })),
       todayPoints: Math.round(todayPoints),
+      teamPointsToday: Math.round(teamPointsToday),
+      topContributorsToday,
       dailyCap,
       myTeamRank,
       myTeamName: myMembership?.Team.name ?? null,

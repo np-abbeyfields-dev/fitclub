@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { userService } from '../services/userService';
 
 /**
  * Registers the device push token with the API when the user is authenticated (mobile only).
+ * Skipped in Expo Go (SDK 53+ removed push from Expo Go; use a development build for push).
  * Run once on mount. Failures are silent so the app is not blocked.
  */
 export function RegisterPushToken() {
@@ -13,10 +14,13 @@ export function RegisterPushToken() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     if (done.current) return;
+    // Push notifications are not supported in Expo Go (SDK 53+). Use a dev build for push.
+    if (Constants.appOwnership === 'expo') return;
 
     let cancelled = false;
     (async () => {
       try {
+        const Notifications = await import('expo-notifications');
         const { status: existing } = await Notifications.getPermissionsAsync();
         let status = existing;
         if (existing !== 'granted') {

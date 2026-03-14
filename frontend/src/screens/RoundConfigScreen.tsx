@@ -67,6 +67,7 @@ export default function RoundConfigScreen() {
   const [sourceRounds, setSourceRounds] = useState<Round[]>([]);
   const [sourceRoundId, setSourceRoundId] = useState<string | null>(null);
   const [copyTeams, setCopyTeams] = useState(false);
+  const [scheduledStartAt, setScheduledStartAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isCreate && roundId) {
@@ -81,6 +82,7 @@ export default function RoundConfigScreen() {
           setEndDate(r.endDate.slice(0, 10));
           setTeamSize(r.teamSize != null ? String(r.teamSize) : '');
           setScoring(parseScoringConfig(r.scoringConfig as Record<string, unknown>));
+          setScheduledStartAt(r.scheduledStartAt ? r.scheduledStartAt.slice(0, 16) : null);
         } catch (e) {
           if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load round');
         } finally {
@@ -211,6 +213,10 @@ export default function RoundConfigScreen() {
         await roundService.create(clubId, body);
         navigation.goBack();
       } else if (!isCreate && roundId) {
+        body.scheduledStartAt = scheduledStartAt?.trim() ? (() => {
+          const d = new Date(scheduledStartAt.trim());
+          return isNaN(d.getTime()) ? null : d.toISOString();
+        })() : null;
         await roundService.update(roundId, body);
         navigation.goBack();
       }
@@ -219,7 +225,7 @@ export default function RoundConfigScreen() {
     } finally {
       setSaving(false);
     }
-  }, [name, startDate, endDate, teamSize, scoring, isCreate, clubId, roundId, sourceRoundId, copyTeams, navigation]);
+  }, [name, startDate, endDate, teamSize, scoring, isCreate, clubId, roundId, sourceRoundId, copyTeams, scheduledStartAt, navigation]);
 
   if (loading) {
     return (
@@ -360,6 +366,28 @@ export default function RoundConfigScreen() {
             style={styles.input}
           />
         </Card>
+
+        {/* Schedule start (edit draft only): round becomes active at this time via batch job */}
+        {!isCreate && roundId && (
+          <Card style={[styles.section, { marginBottom: spacing.md }]}>
+            <Text style={[typography.label, { color: colors.textSecondary, marginBottom: spacing.sm }]}>SCHEDULE START</Text>
+            <Text style={[typography.caption, { color: colors.textSecondary, marginBottom: spacing.sm }]}>
+              Set when this round should go live. A batch job will change status to active at that time. Leave empty to start manually.
+            </Text>
+            <Text style={[typography.label, { color: colors.text, marginBottom: spacing.xs }]}>Start at (date & time)</Text>
+            <Input
+              value={scheduledStartAt ?? ''}
+              onChangeText={(t) => setScheduledStartAt(t.trim() || null)}
+              placeholder="YYYY-MM-DDTHH:mm (e.g. 2025-03-15T09:00)"
+              style={[styles.input, { marginBottom: spacing.xs }]}
+            />
+            {scheduledStartAt ? (
+              <TouchableOpacity onPress={() => setScheduledStartAt(null)} style={{ alignSelf: 'flex-start' }}>
+                <Text style={[typography.caption, { color: colors.primary }]}>Clear scheduled time</Text>
+              </TouchableOpacity>
+            ) : null}
+          </Card>
+        )}
 
         {/* Scoring */}
         <Card style={[styles.section, { marginBottom: spacing.md }]}>

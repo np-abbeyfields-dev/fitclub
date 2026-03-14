@@ -26,9 +26,10 @@ export function WebTopBar() {
   const theme = useTheme();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const { selectedClub } = useClub();
+  const { clubs, selectedClub, setSelectedClub } = useClub();
   const { colors, spacing, radius, typography } = theme;
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [clubPickerOpen, setClubPickerOpen] = useState(false);
   const [activeRoundEnd, setActiveRoundEnd] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,9 +64,19 @@ export function WebTopBar() {
       ]}
     >
       <View style={styles.left}>
-        <Text style={[styles.clubName, { ...typography.h3, color: colors.text }]} numberOfLines={1}>
-          {selectedClub?.name ?? 'FitClub'}
-        </Text>
+        <TouchableOpacity
+          onPress={() => clubs.length > 1 && setClubPickerOpen(true)}
+          style={styles.clubNameTouchable}
+          activeOpacity={clubs.length > 1 ? 0.7 : 1}
+          disabled={clubs.length <= 1}
+        >
+          <Text style={[styles.clubName, { ...typography.h3, color: colors.text }]} numberOfLines={1}>
+            {selectedClub?.name ?? 'FitClub'}
+          </Text>
+          {clubs.length > 1 && (
+            <Ionicons name="chevron-down" size={18} color={colors.textSecondary} style={{ marginLeft: 4 }} />
+          )}
+        </TouchableOpacity>
         {countdown && (
           <View style={[styles.countdownBadge, { backgroundColor: colors.primaryMuted, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs, borderRadius: radius.sm }]}>
             <Ionicons name="time-outline" size={14} color={colors.primary} />
@@ -91,6 +102,54 @@ export function WebTopBar() {
           <Text style={[styles.avatarText, { color: colors.primary }]}>{initial}</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={clubPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setClubPickerOpen(false)}
+      >
+        <Pressable
+          style={[styles.modalOverlay, styles.clubPickerOverlay, { backgroundColor: colors.overlayLight }]}
+          onPress={() => setClubPickerOpen(false)}
+        >
+          <View
+            style={[
+              styles.dropdown,
+              styles.clubPickerDropdown,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radius.md,
+                padding: spacing.xs,
+              },
+            ]}
+          >
+            <Text style={[styles.dropdownName, { ...typography.label, color: colors.textSecondary, padding: spacing.sm }]}>Switch club</Text>
+            {clubs.map((club) => {
+              const isActive = selectedClub?.id === club.id;
+              return (
+                <TouchableOpacity
+                  key={club.id}
+                  onPress={() => {
+                    setSelectedClub(club);
+                    setClubPickerOpen(false);
+                  }}
+                  style={[
+                    styles.dropdownItem,
+                    { padding: spacing.sm, backgroundColor: isActive ? colors.primaryMuted : 'transparent', borderRadius: radius.sm },
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.dropdownItemText, { ...typography.body, fontWeight: isActive ? '700' : '500', color: isActive ? colors.primary : colors.text }]} numberOfLines={1}>
+                    {club.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={avatarOpen}
@@ -150,7 +209,21 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  clubNameTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    maxWidth: '100%',
+  },
   clubName: {},
+  clubPickerOverlay: {
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    paddingTop: 56,
+    paddingLeft: 24,
+  },
+  clubPickerDropdown: {
+    minWidth: 260,
+  },
   countdownBadge: {
     flexDirection: 'row',
     alignItems: 'center',

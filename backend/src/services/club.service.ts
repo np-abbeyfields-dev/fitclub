@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import prisma from '../config/database';
+import { sendClubInviteEmail } from './email.service';
 import { ValidationError, AuthorizationError, NotFoundError } from '../utils/errors';
 
 function generateInviteCode(): string {
@@ -67,6 +68,18 @@ export class ClubService {
     return { ...rest, role: m.role, ...(m.role === 'admin' ? { inviteCode } : {}) };
   }
 
+  /** Admin only. Update club name. */
+  static async updateClub(clubId: string, userId: string, data: { name?: string }) {
+    await this.ensureMember(userId, clubId, 'admin');
+    const name = data.name?.trim();
+    if (!name) throw new ValidationError('Club name is required.');
+    return prisma.club.update({
+      where: { id: clubId },
+      data: { name },
+      select: { id: true, name: true, createdAt: true },
+    });
+  }
+
   /** Roles are derived from ClubMembership only; never stored on User. */
   static async ensureMember(userId: string, clubId: string, requireRole?: 'admin' | 'team_lead' | 'member') {
     const m = await prisma.clubMembership.findUnique({
@@ -89,6 +102,27 @@ export class ClubService {
     if (target.role === 'admin' && newRole !== 'admin') {
       const adminCount = await prisma.clubMembership.count({ where: { clubId, role: 'admin' } });
       if (adminCount <= 1) throw new ValidationError('Club must have at least one admin. Promote another member to admin first.');
+    }
+    if (newRole === 'team_lead') {
+      const round =
+        (await prisma.round.findFirst({
+          where: { clubId, status: 'active' },
+          select: { id: true },
+        })) ??
+        (await prisma.round.findFirst({
+          where: { clubId, status: 'draft' },
+          select: { id: true },
+        }));
+      if (round) {
+        const inTeam = await prisma.teamMembership.findUnique({
+          where: { userId_roundId: { userId: targetUserId, roundId: round.id } },
+        });
+        if (!inTeam) {
+          throw new ValidationError(
+            'User must be in a team to be assigned Team Lead. Add them to a team in the current round first.'
+          );
+        }
+      }
     }
     const updated = await prisma.clubMembership.update({
       where: { userId_clubId: { userId: targetUserId, clubId } },
@@ -157,5 +191,31 @@ export class ClubService {
       where: { userId_clubId: { userId: targetUserId, clubId } },
     });
     return { success: true };
+  }
+
+  /** Any club member. Send an invite email to the given address. Does not expose inviteCode in response. */
+  static async sendInviteByEmail(clubId: string, userId: string, email: string): Promise<{ sent: boolean; error?: string }> {
+    const trimmed = email?.trim()?.toLowerCase();
+    if (!trimmed) throw new ValidationError('Email is required.');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) throw new ValidationError('Please enter a valid email address.');
+    await this.ensureMember(userId, clubId);
+    const club = await prisma.club.findUnique({
+      where: { id: clubId },
+      select: { name: true, inviteCode: true },
+    });
+    if (!club) throw new NotFoundError('Club not found.');
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true },
+    });
+    const inviterDisplayName = user?.displayName?.trim() || 'A club member';
+    const result = await sendClubInviteEmail({
+      toEmail: trimmed,
+      clubName: club.name,
+      inviteCode: club.inviteCode,
+      inviterDisplayName,
+    });
+    return result;
   }
 }

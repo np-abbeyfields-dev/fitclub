@@ -82,7 +82,7 @@ export default function PastRoundsScreen() {
   }, [load]);
 
   const openRound = (roundId: string, roundName: string) => {
-    (navigation as any).navigate('RoundSummary', { roundId, roundName });
+    (navigation as any).navigate('RoundLeaderboard', { roundId, roundName });
   };
 
   const goBack = () => (navigation as any).goBack();

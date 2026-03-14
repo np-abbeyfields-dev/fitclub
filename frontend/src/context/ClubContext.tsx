@@ -56,9 +56,18 @@ export function ClubProvider({ children }: { children: React.ReactNode }) {
       }
       setSelectedClubState(nextSelected);
     } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not load clubs';
+      const isInvalidOrExpiredToken = /invalid token|token|401|unauthorized|expired|sign in again/i.test(message);
+      if (isInvalidOrExpiredToken) {
+        setClubs([]);
+        setSelectedClubState(null);
+        setClubsError(null);
+        setIsLoading(false);
+        await useAuthStore.getState().logout();
+        return;
+      }
       setClubs([]);
       setSelectedClubState(null);
-      const message = e instanceof Error ? e.message : 'Could not load clubs';
       setClubsError(message);
     } finally {
       setIsLoading(false);

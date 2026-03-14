@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { useClub } from '../context/ClubContext';
@@ -13,6 +14,7 @@ const AVATAR_SIZE = 32;
 export function MobileHeader() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const { colors, spacing, typography } = theme;
   const { selectedClub } = useClub();
   const user = useAuthStore((s) => s.user);
@@ -20,6 +22,11 @@ export function MobileHeader() {
 
   const openSheet = useCallback(() => setSheetVisible(true), []);
   const closeSheet = useCallback(() => setSheetVisible(false), []);
+  const openProfile = useCallback(() => {
+    const nav = navigation as any;
+    const tabNav = typeof nav.getParent === 'function' ? nav.getParent() : nav;
+    (tabNav as any).navigate('HomeTab', { screen: 'Profile' });
+  }, [navigation]);
 
   const displayName = selectedClub?.name ?? 'FitClub';
   const initial = (user?.displayName ?? '?').trim().charAt(0).toUpperCase() || '?';
@@ -48,9 +55,13 @@ export function MobileHeader() {
           </Text>
           <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
-        <View style={[styles.avatar, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2, backgroundColor: colors.primaryMuted, alignItems: 'center', justifyContent: 'center' }]}>
-          <Text style={[typography.caption, { color: colors.primary, fontWeight: '800' }]}>{initial}</Text>
-        </View>
+        <TouchableOpacity
+          onPress={openProfile}
+          activeOpacity={0.7}
+          style={[styles.avatar, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2, backgroundColor: colors.primaryMuted, alignItems: 'center', justifyContent: 'center' }]}
+        >
+          <Text style={[typography.caption, { color: theme.isDark ? colors.text : colors.primary, fontWeight: '800' }]}>{initial}</Text>
+        </TouchableOpacity>
       </View>
       <ClubSwitcherSheet visible={sheetVisible} onClose={closeSheet} />
     </View>

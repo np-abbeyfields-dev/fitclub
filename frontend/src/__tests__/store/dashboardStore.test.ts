@@ -15,6 +15,8 @@ const mockDashboard: DashboardData = {
   teamRank: { rank: 1, teamName: 'Team A', points: 100 },
   myTeamRank: 1,
   todayPoints: 10,
+  teamPointsToday: 25,
+  topContributorsToday: [],
   dailyCap: 50,
   topTeams: [],
   topTeamsAll: [],
@@ -77,6 +79,7 @@ describe('dashboardStore', () => {
     const dashboard = result.current.dashboard!;
     expect(dashboard.myRoundPoints).toBe(58);
     expect(dashboard.todayPoints).toBe(18);
+    expect(dashboard.teamPointsToday).toBe(33);
     expect(dashboard.workoutCount).toBe(6);
     expect(dashboard.recentWorkouts[0].activityName).toBe('Running');
     expect(dashboard.recentWorkouts[0].points).toBe(8);

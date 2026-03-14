@@ -171,9 +171,9 @@ export class RoundService {
 
   /**
    * Admin only. Update a round (draft only).
-   * Status cannot be changed here; use activateRound / endRound. Ensures one active round per club is not bypassed.
+   * Status cannot be changed here; use activateRound / activateScheduledRounds / endRound.
    */
-  static async updateRound(roundId: string, userId: string, data: Partial<RoundCreateInput>) {
+  static async updateRound(roundId: string, userId: string, data: Partial<RoundCreateInput> & { scheduledStartAt?: Date | string | null }) {
     const round = await prisma.round.findUnique({ where: { id: roundId } });
     if (!round) throw new NotFoundError('Round not found.');
     await ClubService.ensureMember(userId, round.clubId, 'admin');
@@ -186,11 +186,70 @@ export class RoundService {
     if (data.endDate !== undefined) update.endDate = new Date(data.endDate);
     if (data.scoringConfig !== undefined) update.scoringConfig = data.scoringConfig;
     if (data.teamSize !== undefined) update.teamSize = data.teamSize ?? null;
+    if (data.scheduledStartAt !== undefined) {
+      update.scheduledStartAt = data.scheduledStartAt == null ? null : new Date(data.scheduledStartAt);
+    }
     return prisma.round.update({
       where: { id: roundId },
       data: update as any,
       include: { Club: { select: { id: true, name: true } } },
     });
+  }
+
+  /**
+   * Batch job: activate rounds that are draft and have scheduledStartAt <= now.
+   * One active round per club; processes at most one round per club.
+   */
+  static async activateScheduledRounds(): Promise<{ activated: number; roundIds: string[] }> {
+    const now = new Date();
+    const due = await prisma.round.findMany({
+      where: {
+        status: 'draft',
+        scheduledStartAt: { not: null, lte: now },
+      },
+      orderBy: { scheduledStartAt: 'asc' },
+      select: { id: true, clubId: true, name: true },
+    });
+    const byClub = new Map<string, (typeof due)[0]>();
+    for (const r of due) {
+      if (!byClub.has(r.clubId)) byClub.set(r.clubId, r);
+    }
+    const toActivate = Array.from(byClub.values());
+    const roundIds: string[] = [];
+    for (const round of toActivate) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.round.updateMany({
+            where: { clubId: round.clubId, status: 'active' },
+            data: { status: 'completed' },
+          });
+          await tx.round.update({
+            where: { id: round.id },
+            data: { status: 'active' },
+          });
+        });
+        roundIds.push(round.id);
+        notifyChallengeLive(round.clubId, round.name).catch(() => {});
+        createRoundStartedNotifications(round.clubId, round.name).catch(() => {});
+        const admin = await prisma.clubMembership.findFirst({
+          where: { clubId: round.clubId, role: 'admin' },
+          select: { userId: true },
+        });
+        if (admin) {
+          await prisma.activityFeed.create({
+            data: {
+              clubId: round.clubId,
+              actorUserId: admin.userId,
+              type: 'ROUND_STARTED',
+              metadataJson: JSON.stringify({ roundId: round.id, roundName: round.name, scheduled: true }),
+            },
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.error('[activateScheduledRounds] Failed to activate round', round.id, err);
+      }
+    }
+    return { activated: roundIds.length, roundIds };
   }
 
   /** Admin only. End the active round. */

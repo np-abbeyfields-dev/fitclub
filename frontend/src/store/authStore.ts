@@ -7,47 +7,37 @@ import { User } from '../types';
 const TOKEN_KEY = 'fitclub_auth_token';
 const USER_KEY = 'fitclub_auth_user';
 
-/** On Android, if SecureStore fails (e.g. after R8 or device keychain issues), persist with AsyncStorage so login still works. */
+/** Use AsyncStorage on Android and web; SecureStore has no native module on web and can be broken on some Android builds. */
+const useAsyncStorageForAuth = Platform.OS === 'android' || Platform.OS === 'web';
+
 async function setAuthStorage(token: string, userJson: string): Promise<void> {
-  try {
-    await SecureStore.setItemAsync(TOKEN_KEY, token);
-    await SecureStore.setItemAsync(USER_KEY, userJson);
-  } catch (e) {
-    if (Platform.OS === 'android') {
-      await AsyncStorage.setItem(TOKEN_KEY, token);
-      await AsyncStorage.setItem(USER_KEY, userJson);
-    } else {
-      throw e;
-    }
+  if (useAsyncStorageForAuth) {
+    await AsyncStorage.setItem(TOKEN_KEY, token);
+    await AsyncStorage.setItem(USER_KEY, userJson);
+    return;
   }
+  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  await SecureStore.setItemAsync(USER_KEY, userJson);
 }
 
 async function getAuthStorage(): Promise<{ token: string | null; userJson: string | null }> {
-  try {
-    const token = await SecureStore.getItemAsync(TOKEN_KEY);
-    const userJson = await SecureStore.getItemAsync(USER_KEY);
-    if (token != null && userJson != null) return { token, userJson };
-  } catch {
-    // SecureStore can fail on Android (keychain/backup/device issues).
-  }
-  if (Platform.OS === 'android') {
+  if (useAsyncStorageForAuth) {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     const userJson = await AsyncStorage.getItem(USER_KEY);
     return { token, userJson };
   }
-  return { token: null, userJson: null };
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  const userJson = await SecureStore.getItemAsync(USER_KEY);
+  return { token, userJson };
 }
 
 async function clearAuthStorage(): Promise<void> {
-  try {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
-    await SecureStore.deleteItemAsync(USER_KEY);
-  } catch {
-    // ignore
-  }
-  if (Platform.OS === 'android') {
+  if (useAsyncStorageForAuth) {
     await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]).catch(() => {});
+    return;
   }
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await SecureStore.deleteItemAsync(USER_KEY);
 }
 
 interface AuthState {

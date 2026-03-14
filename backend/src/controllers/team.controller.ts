@@ -17,11 +17,16 @@ export class TeamController {
       return;
     }
     const name = (req.body?.name || '').trim();
+    const teamLeadUserId = (req.body?.teamLeadUserId ?? req.body?.team_lead_user_id ?? '').trim();
     if (!name) {
       res.status(400).json({ success: false, error: 'Team name is required.' } as ApiResponse);
       return;
     }
-    const team = await TeamService.createTeam(roundId, userId, name);
+    if (!teamLeadUserId) {
+      res.status(400).json({ success: false, error: 'Team lead is required. Every team must have a lead.' } as ApiResponse);
+      return;
+    }
+    const team = await TeamService.createTeam(roundId, userId, name, teamLeadUserId);
     res.status(201).json({ success: true, data: team, message: 'Team created.' } as ApiResponse);
   }
 

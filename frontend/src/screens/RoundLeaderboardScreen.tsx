@@ -17,7 +17,7 @@ import { useTheme } from '../theme';
 import { useClub } from '../context/ClubContext';
 import { roundService } from '../services/roundService';
 import type { LeaderboardEntry, LeaderboardTab } from '../types/leaderboard';
-import type { RootStackParamList } from '../navigation/types';
+import type { LeaderboardStackParamList } from '../navigation/types';
 import { RANK_MEDAL } from '../constants/rank';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -26,11 +26,21 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const PODIUM_HEIGHTS = { 1: 88, 2: 72, 3: 72 } as const;
 
+function formatRoundDateRange(startDate: string, endDate: string): string {
+  try {
+    const start = new Date(startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const end = new Date(endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${start} – ${end}`;
+  } catch {
+    return '';
+  }
+}
+
 export default function RoundLeaderboardScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const route = useRoute<RouteProp<RootStackParamList, 'RoundLeaderboard'>>();
+  const route = useRoute<RouteProp<LeaderboardStackParamList, 'RoundLeaderboard'>>();
   const { roundId, roundName } = route.params;
   const { colors, spacing: s, radius: r, typography, shadows, isDark } = theme;
   const { selectedClub } = useClub();
@@ -38,6 +48,7 @@ export default function RoundLeaderboardScreen() {
   const [tab, setTab] = useState<LeaderboardTab>('teams');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [roundDates, setRoundDates] = useState<{ startDate: string; endDate: string } | null>(null);
   const [individuals, setIndividuals] = useState<LeaderboardEntry[]>([]);
   const [teams, setTeams] = useState<LeaderboardEntry[]>([]);
   const prevIndRanks = React.useRef<Map<string, number>>(new Map());
@@ -46,10 +57,19 @@ export default function RoundLeaderboardScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [indRes, teamRes] = await Promise.all([
+      const [roundRes, indRes, teamRes] = await Promise.all([
+        roundService.getById(roundId),
         roundService.getLeaderboard(roundId, 'individuals'),
         roundService.getLeaderboard(roundId, 'teams'),
       ]);
+      if (roundRes.data?.startDate != null && roundRes.data?.endDate != null) {
+        setRoundDates({
+          startDate: roundRes.data.startDate,
+          endDate: roundRes.data.endDate,
+        });
+      } else {
+        setRoundDates(null);
+      }
       const maxInd = indRes.data?.length ? Math.max(...indRes.data.map((e) => e.points)) : 0;
       const maxTeam = teamRes.data?.length ? Math.max(...teamRes.data.map((e) => e.points)) : 0;
       const indList = (indRes.data ?? []).map((e, i) => ({
@@ -73,6 +93,7 @@ export default function RoundLeaderboardScreen() {
       setIndividuals(indList);
       setTeams(teamList);
     } catch {
+      setRoundDates(null);
       setIndividuals([]);
       setTeams([]);
     } finally {
@@ -113,6 +134,14 @@ export default function RoundLeaderboardScreen() {
 
   const goBack = () => (navigation as any).goBack();
 
+  const nav = navigation as any;
+  const onTeamPress = (teamId: string, teamName: string) => {
+    nav.navigate('TeamDetail', { roundId, teamId, roundName, teamName });
+  };
+  const onIndividualPress = (userId: string, userName: string) => {
+    nav.navigate('MemberActivity', { roundId, userId, userName });
+  };
+
   if (loading && data.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: colors.surface, flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
@@ -132,12 +161,17 @@ export default function RoundLeaderboardScreen() {
           <Text style={[typography.h3, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>
             {roundName}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: s.sm, marginTop: s.xxs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: s.sm, marginTop: s.xxs }}>
             <View style={{ backgroundColor: colors.textSecondary, paddingHorizontal: s.xs, paddingVertical: s.xxs, borderRadius: r.sm }}>
               <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700' }]}>Ended</Text>
             </View>
+            {roundDates && (
+              <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
+                {formatRoundDateRange(roundDates.startDate, roundDates.endDate)}
+              </Text>
+            )}
             <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
-              {totalPoints.toLocaleString()} pts total
+              {roundDates ? ' • ' : ''}{totalPoints.toLocaleString()} pts total
             </Text>
           </View>
         </View>
@@ -207,14 +241,20 @@ export default function RoundLeaderboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Podium */}
+        {/* Podium — tap to drill down: team → Team Detail, individual → Member Activity */}
         {top3.length > 0 && (
           <View style={[styles.podiumRow, { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginBottom: s.sm, gap: s.xs }]}>
             {[2, 1, 3].map((rank) => {
               const entry = top3.find((e) => e.rank === rank);
               if (!entry) return null;
+              const onPress = tab === 'teams' ? () => onTeamPress(entry.id, entry.name) : () => onIndividualPress(entry.id, entry.name);
               return (
-                <View key={entry.id} style={[styles.podiumSlot, { flex: 1, alignItems: 'center' }]}>
+                <TouchableOpacity
+                  key={entry.id}
+                  style={[styles.podiumSlot, { flex: 1, alignItems: 'center' }]}
+                  onPress={onPress}
+                  activeOpacity={0.85}
+                >
                   <Text style={styles.medalPodium}>{RANK_MEDAL[rank as 1 | 2 | 3]}</Text>
                   <View
                     style={[
@@ -244,7 +284,7 @@ export default function RoundLeaderboardScreen() {
                     <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '800' }]} numberOfLines={1}>{entry.name}</Text>
                     <Text style={[typography.label, { color: rank === 1 ? colors.gold : rank === 2 ? colors.silver : colors.bronze, fontWeight: '800' }]}>{entry.points.toLocaleString()}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -256,53 +296,58 @@ export default function RoundLeaderboardScreen() {
           <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', flex: 1 }]}>{tab === 'teams' ? 'Team' : 'Name'}</Text>
           <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', textAlign: 'right', minWidth: 56 }]}>Pts</Text>
         </View>
-        {rest.map((item) => (
-          <View
-            key={item.id}
-            style={[
-              styles.listRow,
-              {
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: s.xs + 2,
-                paddingHorizontal: s.sm,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-                backgroundColor: item.isCurrentUser ? colors.accentMuted : colors.transparent,
-              },
-            ]}
-          >
-            <View style={{ width: 32, alignItems: 'center' }}>
-              <Text style={[typography.bodySmall, { fontWeight: '800', color: colors.textPrimary }]}>#{item.rank}</Text>
-              {item.rankChange != null && item.rankChange !== 0 && (
-                <Text
-                  style={[
-                    typography.caption,
-                    {
-                      fontWeight: '800',
-                      fontSize: 10,
-                      color: item.rankChange > 0 ? colors.success : colors.danger,
-                      marginTop: 1,
-                    },
-                  ]}
-                >
-                  {item.rankChange > 0 ? `▲${item.rankChange}` : `▼${Math.abs(item.rankChange)}`}
-                </Text>
-              )}
-            </View>
-            <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: s.sm }}>
-              <Text style={[typography.body, { fontWeight: '700', color: colors.textPrimary }]} numberOfLines={1}>{item.name}</Text>
-              {item.isCurrentUser && (
-                <View style={{ backgroundColor: colors.energy, paddingHorizontal: s.xs, paddingVertical: s.xxs, borderRadius: r.sm }}>
-                  <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700', fontSize: 10 }]}>
-                    {tab === 'teams' ? 'Your Team' : 'You'}
+        {rest.map((item) => {
+          const onPress = tab === 'teams' ? () => onTeamPress(item.id, item.name) : () => onIndividualPress(item.id, item.name);
+          return (
+            <TouchableOpacity
+              key={item.id}
+              onPress={onPress}
+              activeOpacity={0.85}
+              style={[
+                styles.listRow,
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: s.xs + 2,
+                  paddingHorizontal: s.sm,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                  backgroundColor: item.isCurrentUser ? colors.accentMuted : colors.transparent,
+                },
+              ]}
+            >
+              <View style={{ width: 32, alignItems: 'center' }}>
+                <Text style={[typography.bodySmall, { fontWeight: '800', color: colors.textPrimary }]}>#{item.rank}</Text>
+                {item.rankChange != null && item.rankChange !== 0 && (
+                  <Text
+                    style={[
+                      typography.caption,
+                      {
+                        fontWeight: '800',
+                        fontSize: 10,
+                        color: item.rankChange > 0 ? colors.success : colors.danger,
+                        marginTop: 1,
+                      },
+                    ]}
+                  >
+                    {item.rankChange > 0 ? `▲${item.rankChange}` : `▼${Math.abs(item.rankChange)}`}
                   </Text>
-                </View>
-              )}
-            </View>
-            <Text style={[typography.label, { fontWeight: '800', color: colors.energy, textAlign: 'right', minWidth: 56 }]}>{item.points.toLocaleString()}</Text>
-          </View>
-        ))}
+                )}
+              </View>
+              <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: s.sm }}>
+                <Text style={[typography.body, { fontWeight: '700', color: colors.textPrimary }]} numberOfLines={1}>{item.name}</Text>
+                {item.isCurrentUser && (
+                  <View style={{ backgroundColor: colors.energy, paddingHorizontal: s.xs, paddingVertical: s.xxs, borderRadius: r.sm }}>
+                    <Text style={[typography.caption, { color: colors.textInverse, fontWeight: '700', fontSize: 10 }]}>
+                      {tab === 'teams' ? 'Your Team' : 'You'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[typography.label, { fontWeight: '800', color: colors.energy, textAlign: 'right', minWidth: 56 }]}>{item.points.toLocaleString()}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );

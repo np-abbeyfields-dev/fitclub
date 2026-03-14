@@ -1,6 +1,7 @@
 import prisma from '../config/database';
 import { AuthorizationError, NotFoundError, ValidationError } from '../utils/errors';
 import { ClubService } from './club.service';
+import { CustomChallengeService } from './customChallenge.service';
 
 /** Enforce unique(roundId, userId): one team per user per round. DB enforces via TeamMembership_userId_roundId_key. */
 async function ensureOneTeamPerUserPerRound(roundId: string, userId: string): Promise<void> {
@@ -15,27 +16,43 @@ async function ensureOneTeamPerUserPerRound(roundId: string, userId: string): Pr
 }
 
 export class TeamService {
-  /** Any club member when round is active. Create a team. */
-  static async createTeam(roundId: string, userId: string, name: string) {
+  /** Club admin only, draft only. Creates team and adds teamLeadUserId as first member with isLeader true. */
+  static async createTeam(roundId: string, callerUserId: string, name: string, teamLeadUserId: string) {
     const round = await prisma.round.findUnique({ where: { id: roundId } });
     if (!round) throw new NotFoundError('Round not found.');
-    await ClubService.ensureMember(userId, round.clubId);
-    if (round.status !== 'active') {
-      throw new ValidationError('Teams can only be created when the round is active.');
+    await ClubService.ensureMember(callerUserId, round.clubId, 'admin');
+    if (round.status !== 'draft') {
+      throw new ValidationError('Teams can only be created when the round is in draft. Once the round has started, teams are locked.');
     }
+    if (!teamLeadUserId?.trim()) {
+      throw new ValidationError('Team lead is required. Every team must have a lead.');
+    }
+    const leadUserId = teamLeadUserId.trim();
+    await ClubService.ensureMember(leadUserId, round.clubId);
+    await ensureOneTeamPerUserPerRound(roundId, leadUserId);
+
     const team = await prisma.team.create({
-      data: { roundId, name: name.trim(), createdBy: userId },
+      data: { roundId, name: name.trim(), createdBy: callerUserId },
       include: { Round: { select: { id: true, name: true, status: true, clubId: true } } },
+    });
+    await prisma.teamMembership.create({
+      data: { userId: leadUserId, teamId: team.id, roundId, isLeader: true },
     });
     await prisma.activityFeed.create({
       data: {
         clubId: team.Round.clubId,
-        actorUserId: userId,
+        actorUserId: callerUserId,
         type: 'TEAM_CREATED',
-        metadataJson: JSON.stringify({ teamId: team.id, teamName: team.name, roundId }),
+        metadataJson: JSON.stringify({ teamId: team.id, teamName: team.name, roundId, teamLeadUserId: leadUserId }),
       },
     }).catch(() => {});
-    return team;
+    return prisma.team.findUniqueOrThrow({
+      where: { id: team.id },
+      include: {
+        Round: { select: { id: true, name: true, status: true, clubId: true } },
+        Memberships: { include: { User: { select: { id: true, displayName: true, email: true } } } },
+      },
+    });
   }
 
   /** Any club member. List teams for a round. */
@@ -73,8 +90,8 @@ export class TeamService {
       }
     }
 
-    if (round.status !== 'active') {
-      throw new ValidationError('Members can only be added to teams when the round is active.');
+    if (round.status !== 'draft') {
+      throw new ValidationError('Members can only be added to teams when the round is in draft. Once the round has started, teams are locked.');
     }
 
     const team = await prisma.team.findFirst({ where: { id: teamId, roundId } });
@@ -108,10 +125,13 @@ export class TeamService {
     return membership;
   }
 
-  /** Remove a member from a team. Caller must be club admin or team_lead (team_lead only for their own team). */
+  /** Remove a member from a team. Caller must be club admin or team_lead (team_lead only for their own team). Only allowed when round is draft. */
   static async removeMemberFromTeam(roundId: string, teamId: string, userIdToRemove: string, callerUserId: string) {
     const round = await prisma.round.findUnique({ where: { id: roundId } });
     if (!round) throw new NotFoundError('Round not found.');
+    if (round.status !== 'draft') {
+      throw new ValidationError('Members can only be removed when the round is in draft. Once the round has started, teams are locked.');
+    }
     const callerMembership = await ClubService.ensureMember(callerUserId, round.clubId);
     if (callerMembership.role !== 'admin') {
       if (callerMembership.role !== 'team_lead')
@@ -167,40 +187,67 @@ export class TeamService {
     });
     if (!team) throw new NotFoundError('Team not found.');
     const userIds = team.Memberships.map((m) => m.userId);
-    const scores = userIds.length
-      ? await prisma.scoreLedger.groupBy({
-          by: ['userId'],
-          where: { roundId, userId: { in: userIds } },
-          _sum: { finalAwardedPoints: true },
-        })
-      : [];
-    const pointsByUser = new Map(scores.map((s) => [s.userId, s._sum.finalAwardedPoints ?? 0]));
+    const allCustomMap = await CustomChallengeService.sumPointsByUserForRound(roundId);
+    const allScores = await prisma.scoreLedger.groupBy({
+      by: ['userId'],
+      where: { roundId },
+      _sum: { finalAwardedPoints: true },
+    });
+    const allWorkoutPoints = new Map(allScores.map((s) => [s.userId, s._sum.finalAwardedPoints ?? 0]));
+
+    const [scores, workoutCounts, customCounts] =
+      userIds.length > 0
+        ? await Promise.all([
+            prisma.scoreLedger.groupBy({
+              by: ['userId'],
+              where: { roundId, userId: { in: userIds } },
+              _sum: { finalAwardedPoints: true },
+            }),
+            prisma.workout.groupBy({
+              by: ['userId'],
+              where: { roundId, userId: { in: userIds } },
+              _count: { id: true },
+            }),
+            prisma.customChallengeCompletion.groupBy({
+              by: ['userId'],
+              where: { roundId, userId: { in: userIds } },
+              _count: { id: true },
+            }),
+          ])
+        : [[], [], []];
+    const workoutPointsByUser = new Map(scores.map((s) => [s.userId, s._sum.finalAwardedPoints ?? 0]));
+    const workoutCountByUser = new Map(workoutCounts.map((w) => [w.userId, w._count.id]));
+    const challengeCountByUser = new Map(customCounts.map((c) => [c.userId, c._count.id]));
+    const pointsByUser = new Map<string, number>();
+    for (const uid of userIds) {
+      const workoutPts = workoutPointsByUser.get(uid) ?? 0;
+      const customPts = allCustomMap.get(uid) ?? 0;
+      pointsByUser.set(uid, workoutPts + customPts);
+    }
+    for (const [uid, pts] of allCustomMap) {
+      if (!pointsByUser.has(uid)) pointsByUser.set(uid, pts);
+    }
     const total = team.Memberships.reduce((sum, m) => sum + (pointsByUser.get(m.userId) ?? 0), 0);
     const members = team.Memberships.map((m) => ({
       id: m.id,
       userId: m.userId,
       name: m.User.displayName,
       points: Math.round(pointsByUser.get(m.userId) ?? 0),
+      workoutCount: workoutCountByUser.get(m.userId) ?? 0,
+      challengeCount: challengeCountByUser.get(m.userId) ?? 0,
       isCurrentUser: m.userId === userId,
       contributionPercent: total > 0 ? ((pointsByUser.get(m.userId) ?? 0) / total) * 100 : 0,
       isTeamLead: m.isLeader,
     }));
     const allTeams = await prisma.team.findMany({ where: { roundId }, include: { Memberships: true } });
-    const teamTotals = await Promise.all(
-      allTeams.map(async (t) => {
-        const ids = t.Memberships.map((m) => m.userId);
-        const s =
-          ids.length > 0
-            ? await prisma.scoreLedger.groupBy({
-                by: ['userId'],
-                where: { roundId, userId: { in: ids } },
-                _sum: { finalAwardedPoints: true },
-              })
-            : [];
-        const tot = s.reduce((sum, x) => sum + (x._sum.finalAwardedPoints ?? 0), 0);
-        return { teamId: t.id, total: tot };
-      })
-    );
+    const teamTotals = allTeams.map((t) => {
+      const tot = t.Memberships.reduce(
+        (sum, m) =>
+          sum + (allWorkoutPoints.get(m.userId) ?? 0) + (allCustomMap.get(m.userId) ?? 0),
+        0
+      );
+      return { teamId: t.id, total: tot };
+    });
     teamTotals.sort((a, b) => b.total - a.total);
     const rank = teamTotals.findIndex((t) => t.teamId === teamId) + 1 || 0;
     return {

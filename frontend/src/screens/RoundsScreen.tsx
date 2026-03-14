@@ -17,9 +17,9 @@ import { Card } from '../components';
 import { useClub } from '../context/ClubContext';
 import { roundService, type Round } from '../services/roundService';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/types';
+import type { HomeStackParamList } from '../navigation/types';
 
-type Nav = NativeStackNavigationProp<RootStackParamList, 'Rounds'>;
+type Nav = NativeStackNavigationProp<HomeStackParamList, 'Rounds'>;
 
 export default function RoundsScreen() {
   const navigation = useNavigation<Nav>();
@@ -132,6 +132,11 @@ export default function RoundsScreen() {
   const statusColor = (s: string) => (s === 'active' ? colors.accent : s === 'completed' ? colors.textMuted : colors.primary);
   const statusBgColor = (s: string) => (s === 'active' ? colors.accentMuted : s === 'completed' ? colors.borderLight : colors.primaryMuted);
 
+  const hasActiveRound = rounds.some((r) => r.status === 'active');
+  const draftRounds = rounds.filter((r) => r.status === 'draft');
+  const showNoLiveBanner = !hasActiveRound && draftRounds.length > 0;
+  const onlyCompleted = !hasActiveRound && draftRounds.length === 0 && rounds.length > 0;
+
   return (
     <>
       <View style={[styles.headerOuter, { paddingTop: insets.top + spacing.sm, paddingBottom: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
@@ -164,6 +169,24 @@ export default function RoundsScreen() {
           </View>
         )}
 
+        {showNoLiveBanner && (
+          <Card style={[styles.banner, { padding: spacing.md, marginBottom: spacing.md, backgroundColor: colors.primaryMuted, borderWidth: 1, borderColor: colors.primary }]}>
+            <Text style={[typography.body, { fontWeight: '600', color: colors.text, marginBottom: spacing.xs }]}>No round is live</Text>
+            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
+              You have a draft round. Set a start date & time (Edit) or start it right away (Start now).
+            </Text>
+          </Card>
+        )}
+
+        {onlyCompleted && (
+          <Card style={[styles.banner, { padding: spacing.md, marginBottom: spacing.md, backgroundColor: colors.borderLight, borderWidth: 1, borderColor: colors.border }]}>
+            <Text style={[typography.body, { fontWeight: '600', color: colors.text, marginBottom: spacing.xs }]}>No round is live</Text>
+            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
+              Create a new round to start another challenge. You can copy from a past round when creating.
+            </Text>
+          </Card>
+        )}
+
         <View style={{ gap: spacing.sm }}>
           {rounds.map((r) => {
             const busy = actioningId === r.id;
@@ -178,15 +201,21 @@ export default function RoundsScreen() {
                     <View style={[styles.statusBadge, { backgroundColor: statusBgColor(r.status), paddingHorizontal: spacing.xs, paddingVertical: 2, borderRadius: radius.sm, alignSelf: 'flex-start', marginTop: spacing.xs }]}>
                       <Text style={[typography.caption, { fontWeight: '600', color: statusColor(r.status) }]}>{r.status}</Text>
                     </View>
+                    {r.status === 'draft' && r.scheduledStartAt && (
+                      <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.xs }]}>
+                        Starts {new Date(r.scheduledStartAt).toLocaleString()}
+                      </Text>
+                    )}
                   </View>
                   <View style={[styles.roundActions, { flexDirection: 'row', alignItems: 'center', gap: spacing.xs }]}>
                     {r.status === 'draft' && (
                       <>
-                        <TouchableOpacity onPress={() => openEdit(r)} style={[styles.iconBtn, { padding: spacing.xs }]}>
-                          <Ionicons name="pencil-outline" size={22} color={colors.primary} />
+                        <TouchableOpacity onPress={() => openEdit(r)} style={[styles.iconBtn, { paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.primary }]}>
+                          <Ionicons name="calendar-outline" size={18} color={colors.primary} style={{ marginRight: 4 }} />
+                          <Text style={[typography.caption, { fontWeight: '600', color: colors.primary }]}>Set start</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => activate(r)} disabled={busy} style={[styles.iconBtn, { padding: spacing.xs }]}>
-                          {busy ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="play-outline" size={22} color={colors.accent} />}
+                        <TouchableOpacity onPress={() => activate(r)} disabled={busy} style={[styles.iconBtn, { paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.accent }]}>
+                          {busy ? <ActivityIndicator size="small" color={colors.textInverse} /> : <><Ionicons name="play-outline" size={18} color={colors.textInverse} style={{ marginRight: 4 }} /><Text style={[typography.caption, { fontWeight: '600', color: colors.textInverse }]}>Start now</Text></>}
                         </TouchableOpacity>
                       </>
                     )}
@@ -224,7 +253,8 @@ const styles = StyleSheet.create({
   roundBody: { flex: 1, minWidth: 0 },
   statusBadge: {},
   roundActions: {},
-  iconBtn: {},
+  iconBtn: { flexDirection: 'row', alignItems: 'center' },
+  banner: {},
   primaryBtn: { alignItems: 'center', justifyContent: 'center' },
   secondaryBtn: {},
   empty: { alignItems: 'center', justifyContent: 'center' },

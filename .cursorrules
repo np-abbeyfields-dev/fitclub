@@ -9,6 +9,14 @@
 
 See `.cursor/rules/ui-design-tokens.mdc` for the full rule.
 
+## Future features and NFRs (think when planning)
+
+When planning features, storage, or infrastructure, consider the rules in `.cursor/rules/future-features-and-nfrs.mdc`:
+
+- **AI workout logging**: Gemini/Claude to simplify workout entry; always account for AI cost.
+- **Media**: MVP = no user picture uploads. Post-MVP = activity pictures allowed; requires extra storage and cost.
+- **Database and infra**: DB can grow exponentially with workout logs. Design for cost, High Availability, Disaster Recovery, scalability, and performance NFRs.
+
 ## Reference codebase: TeenLifeManager (read-only)
 
 **Do not modify any file in the TeenLifeManager folder from this workspace.** TeenLifeManager is included for reference only. You may read and copy from it (structure, patterns, docs); never edit, move, or delete files in that project.

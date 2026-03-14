@@ -20,8 +20,9 @@ import { getPersistedNavState, saveNavState } from './src/navigation/persistence
 import { navLightTheme, navDarkTheme } from './src/navigation/theme';
 
 import { AuthStack } from './src/navigation/AuthStack';
-import { RootStack } from './src/navigation/RootStack';
+import { MainTabs } from './src/navigation/MainTabs';
 import { WebAppLayout } from './src/layout/WebAppLayout';
+import { RegisterPushToken } from './src/components/RegisterPushToken';
 import { ClubProvider } from './src/context/ClubContext';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -41,6 +42,7 @@ function AppContent() {
   const [initialState, setInitialState] = useState<React.ComponentProps<typeof NavigationContainer>['initialState']>(undefined);
   const theme = useTheme();
   const navTheme = theme.isDark ? navDarkTheme : navLightTheme;
+  const containerRef = React.useRef<React.ElementRef<typeof NavigationContainer>>(null);
 
   useEffect(() => {
     initializeAPI();
@@ -68,6 +70,7 @@ function AppContent() {
 
   return (
     <NavigationContainer
+      ref={containerRef}
       key={isAuthenticated ? 'main' : 'auth'}
       theme={navTheme}
       initialState={isAuthenticated && !isWeb ? initialState : undefined}
@@ -78,9 +81,12 @@ function AppContent() {
       {isAuthenticated ? (
         <ClubProvider>
           {isWeb ? (
-            <WebAppLayout />
+            <WebAppLayout containerRef={containerRef} />
           ) : (
-            <RootStack />
+            <>
+              <RegisterPushToken />
+              <MainTabs />
+            </>
           )}
         </ClubProvider>
       ) : (

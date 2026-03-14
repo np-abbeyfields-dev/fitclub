@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -50,8 +51,11 @@ export function WebSidebar({ activeRoute, onNavigate }: WebSidebarProps) {
           width: sidebarWidth,
           backgroundColor: colors.surface,
           borderRightColor: colors.border,
+          zIndex: 10,
+          position: 'relative',
         },
       ]}
+      pointerEvents="box-none"
     >
       <ScrollView
         style={styles.scroll}
@@ -111,20 +115,24 @@ function SidebarItem({
   radius: Record<string, number>;
   onPress: () => void;
 }) {
+  const itemStyle = [
+    styles.item,
+    {
+      backgroundColor: active ? colors.primaryMuted : colors.transparent,
+      marginHorizontal: spacing.xs,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: collapsed ? spacing.xs : spacing.sm,
+      borderRadius: radius.md,
+    },
+  ];
+  if (Platform.OS === 'web') {
+    (itemStyle as any).cursor = 'pointer';
+  }
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.7}
-      style={[
-        styles.item,
-        {
-          backgroundColor: active ? colors.primaryMuted : colors.transparent,
-          marginHorizontal: spacing.xs,
-          paddingVertical: spacing.sm,
-          paddingHorizontal: collapsed ? spacing.xs : spacing.sm,
-          borderRadius: radius.md,
-        },
-      ]}
+      style={itemStyle}
     >
       <Ionicons
         name={item.icon}
@@ -167,6 +175,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
+    minHeight: 44,
   },
   label: {
     fontSize: 15,

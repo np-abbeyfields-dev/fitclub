@@ -35,12 +35,12 @@ export function ClubSwitcherSheet({ visible, onClose }: Props) {
 
   const handleJoinClub = () => {
     onClose();
-    (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'JoinClub' } });
+    (navigation as any).getParent()?.navigate('HomeTab', { screen: 'JoinClub' });
   };
 
   const handleCreateClub = () => {
     onClose();
-    (navigation as any).navigate('MainTabs', { screen: 'HomeTab', params: { screen: 'CreateClub' } });
+    (navigation as any).getParent()?.navigate('HomeTab', { screen: 'CreateClub' });
   };
 
   return (

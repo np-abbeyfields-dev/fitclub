@@ -27,6 +27,8 @@ export type LogWorkoutInput = {
   proofUrl?: string | null;
   note?: string | null;
   loggedAt?: string; // ISO
+  /** BETA_MMR: Optional. Set when importing from MMR; used for dedupe. Remove when dropping MMR sync. */
+  mmrWorkoutId?: string | null;
 };
 
 export type WorkoutActivityOption = {
@@ -185,6 +187,8 @@ export async function logWorkout(roundId: string, userId: string, input: LogWork
         proofUrl: input.proofUrl ?? undefined,
         notes: input.note ? String(input.note).trim() || undefined : undefined,
         loggedAt,
+        // BETA_MMR: remove when dropping MMR sync
+        ...(input.mmrWorkoutId ? { mmrWorkoutId: input.mmrWorkoutId } : {}),
       },
     });
     await tx.scoreLedger.create({
@@ -326,6 +330,37 @@ export async function listMyWorkouts(userId: string, options: { roundId?: string
     id: w.id,
     roundId: w.roundId,
     roundName: w.Round.name,
+    activityType: w.activityType,
+    durationMinutes: w.durationMinutes,
+    distanceKm: w.distanceKm,
+    points: Math.round(w.ScoreLedger?.finalAwardedPoints ?? 0),
+    loggedAt: w.loggedAt.toISOString(),
+  }));
+}
+
+/**
+ * List workouts for a specific user in a round. Caller must be a member of the round's club.
+ * Used for Member Activity drill-down from leaderboard.
+ */
+export async function listWorkoutsForUserInRound(
+  roundId: string,
+  targetUserId: string,
+  callerUserId: string,
+  limit = 50
+) {
+  const round = await prisma.round.findUnique({ where: { id: roundId }, select: { clubId: true } });
+  if (!round) throw new NotFoundError('Round not found.');
+  await ClubService.ensureMember(callerUserId, round.clubId);
+  const take = Math.min(limit, 100);
+  const workouts = await prisma.workout.findMany({
+    where: { userId: targetUserId, roundId },
+    orderBy: { loggedAt: 'desc' },
+    take,
+    include: { ScoreLedger: { select: { finalAwardedPoints: true } } },
+  });
+  return workouts.map((w) => ({
+    id: w.id,
+    roundId: w.roundId,
     activityType: w.activityType,
     durationMinutes: w.durationMinutes,
     distanceKm: w.distanceKm,

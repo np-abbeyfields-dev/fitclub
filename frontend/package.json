@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "eas:version:set": "npx eas-cli build:version:set"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",

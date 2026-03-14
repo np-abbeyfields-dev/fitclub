@@ -27,6 +27,7 @@ export type Team = {
     userId: string;
     teamId: string;
     roundId: string;
+    isLeader?: boolean;
     User: { id: string; displayName: string; email: string };
   }>;
 };
@@ -56,10 +57,10 @@ export const teamService = {
       };
     }>(`/rounds/${roundId}/my-team`);
   },
-  create(roundId: string, name: string) {
+  create(roundId: string, name: string, teamLeadUserId: string) {
     return request<{ success: boolean; data: Team }>(`/rounds/${roundId}/teams`, {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, teamLeadUserId }),
     });
   },
   addMember(roundId: string, teamId: string, userId: string) {
@@ -85,8 +86,11 @@ export const teamService = {
         totalPoints: number;
         members: Array<{
           id: string;
+          userId?: string;
           name: string;
           points: number;
+          workoutCount?: number;
+          challengeCount?: number;
           isCurrentUser: boolean;
           contributionPercent: number;
         }>;

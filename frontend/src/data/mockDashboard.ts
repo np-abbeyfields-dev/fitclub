@@ -13,6 +13,12 @@ export const mockDashboard: DashboardData = {
     points: 2840,
   },
   todayPoints: 340,
+  teamPointsToday: 800,
+  topContributorsToday: [
+    { displayName: 'You', points: 120 },
+    { displayName: 'Alex', points: 80 },
+    { displayName: 'Sam', points: 65 },
+  ],
   dailyCap: 500,
   topTeams: [
     { rank: 1, teamName: 'Peak Performers', points: 3120 },

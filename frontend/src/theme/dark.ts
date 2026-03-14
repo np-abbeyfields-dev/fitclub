@@ -1,5 +1,5 @@
 /**
- * Dark theme — uses theme/colors.ts dark palette + aliases.
+ * Dark theme — fitness palette (Strava/Nike Run Club style) + aliases.
  */
 
 import { spacing, radius, shadows as shadowTokens, animation } from './tokens';
@@ -10,42 +10,42 @@ import { typography as typeScale, fontFamily } from './typography';
 const c = darkPalette;
 const t = typeScale;
 
-/** Dark theme colors: surface layers + accent-only highlights. */
+/** Dark theme colors: fitness tokens + aliases for existing usage. */
 const darkColors = {
   ...c,
 
   text: c.textPrimary,
   textMuted: c.textSecondary,
-  mutedText: c.textSecondary,
+  mutedText: c.textMuted,
   primaryMuted: c.primarySoft,
-  primaryHover: '#60A5FA',
-  textInverse: '#0B1220',
+  primaryHover: c.primarySoft,
+  textInverse: c.backgroundPrimary,
 
-  accent: c.energy,
-  accentMuted: c.energySoft,
+  accent: c.primary,
+  accentMuted: c.primarySoft,
+  energy: c.primary,
+  energySoft: c.primarySoft,
   error: c.danger,
   errorMuted: 'rgba(127,29,29,0.5)',
-  successMuted: c.successSoft,
-  warning: c.competition,
+  successMuted: '#14532D',
+  warning: c.warning,
   warningMuted: '#78350F',
 
-  background: '#0B1220',
-  surface: '#111827',
-  surfaceElevated: '#1F2937',
-  card: '#1F2937',
-  statCardBackground: '#1F2937',
-  inputBackground: '#1F2937',
-  border: '#374151',
-  borderLight: '#374151',
+  background: c.backgroundPrimary,
+  surface: c.cardBackground,
+  surfaceElevated: c.cardElevated,
+  card: c.cardBackground,
+  statCardBackground: c.cardBackground,
+  inputBackground: c.cardBackground,
+  borderLight: c.border,
 
-  heroBackground: '#1E3A8A',
-  heroGradientStart: '#1E3A8A',
-  heroGradientEnd: '#1E40AF',
-  heroText: '#FFFFFF',
-  heroTextMuted: 'rgba(255,255,255,0.88)',
+  heroBackground: c.primary,
+  heroGradientStart: c.backgroundPrimary,
+  heroGradientEnd: c.cardElevated,
+  heroText: c.textPrimary,
+  heroTextMuted: 'rgba(248,250,252,0.88)',
 
-  /** Darker green for weekly activity / streak in dark mode. */
-  successActivity: '#16A34A',
+  successActivity: c.success,
 
   transparent: 'transparent' as const,
   shadowColor: '#000000',
@@ -56,17 +56,16 @@ const darkColors = {
   socialApple: '#FFFFFF',
 
   goldMuted: '#FEF9C3',
-  silverMuted: '#374151',
+  silverMuted: c.cardElevated,
   bronzeMuted: '#78350F',
 
-  /** Onboarding card tints (darker) */
   onboardingCardJoin: '#1E3A5F',
   onboardingCardCompete: '#3D2E1E',
   onboardingCardLog: '#0F2E1A',
 
-  authGradient: ['#0B1220', '#111827', '#1F2937'] as readonly [string, string, string],
-  authLogoGradient: ['#3B82F6', '#60A5FA'] as readonly [string, string],
-  authOverlayText: '#FFFFFF',
+  authGradient: [c.backgroundPrimary, c.backgroundSecondary, c.cardBackground] as readonly [string, string, string],
+  authLogoGradient: [c.primary, c.primarySoft] as readonly [string, string],
+  authOverlayText: c.textPrimary,
   authOverlayTextMuted: 'rgba(248,250,252,0.9)',
 };
 
